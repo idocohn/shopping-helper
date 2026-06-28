@@ -1,6 +1,15 @@
 install:
 	python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
 
+build:
+	python build_catalog.py --outdir data
+
+build-hahishook:
+	python build_catalog.py --outdir data --only hahishook
+
+build-shufersal:
+	python build_catalog.py --outdir data --only shufersal
+
 discover:
 	python -m scraper.discover
 

@@ -23,8 +23,8 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Scrape full catalog
-        run: python -m scraper.scrape --discover --outdir data
+      - name: Build merged catalog (all sources)
+        run: python build_catalog.py --outdir data
       - name: Build static site for GitHub Pages
         env:
           REPO_OWNER: ${{ github.repository_owner }}
@@ -34,13 +34,15 @@ jobs:
           mkdir -p _site
           cp data/products.json data/categories.json _site/
           python - <<'PY'
-          import json, os, datetime, pathlib
+          import json, os, datetime, pathlib, collections
           rows = json.load(open('data/products.json', encoding='utf-8'))
+          sources = collections.Counter(r.get('source') or 'unknown' for r in rows)
           manifest = {
               "count": len(rows),
               "updated_at": datetime.datetime.utcnow().isoformat() + "Z",
               "owner": os.environ["REPO_OWNER"],
               "repo": os.environ["REPO_NAME"],
+              "sources": dict(sources),
           }
           pathlib.Path('_site/manifest.json').write_text(
               json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -55,7 +57,7 @@ jobs:
       - name: Commit refreshed data files
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: Update Hahishook catalog
+          commit_message: Update catalog (auto)
           file_pattern: data/products.json data/products.csv data/catalog.sqlite data/categories.json
 
   deploy:
