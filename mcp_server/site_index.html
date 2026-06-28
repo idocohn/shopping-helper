@@ -143,7 +143,7 @@ const state = {
   page: 1,
   q: "",
   category: "",
-  source: "",
+  source: "hahishook",
   sort: "default",
   maxPrice: null,
   inStock: true,
@@ -291,6 +291,13 @@ async function init() {
       opt.value = src;
       opt.textContent = `${src} (${n.toLocaleString()})`;
       sourceSelect.appendChild(opt);
+    }
+    // Sync the dropdown to the default source if it actually exists in the data.
+    if (state.source && sourceCounts.has(state.source)) {
+      sourceSelect.value = state.source;
+    } else {
+      state.source = "";
+      sourceSelect.value = "";
     }
     if (manifestRes && manifestRes.ok) {
       const m = await manifestRes.json();

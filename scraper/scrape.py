@@ -181,6 +181,9 @@ async def scrape_hahishook(
     if categories_path and not discover_first and categories_path.exists():
         categories = json.loads(categories_path.read_text(encoding="utf-8"))
     else:
+        categories = []
+    if not categories:
+        # Empty/missing file or forced rediscovery -> walk the site.
         print("Discovering Hahishook categories...")
         categories = await discover_categories()
         if categories_path:
