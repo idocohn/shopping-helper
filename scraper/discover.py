@@ -6,10 +6,9 @@ from urllib.parse import urlparse
 import httpx
 from bs4 import BeautifulSoup
 from rich.console import Console
-from .utils import BASE_URL, normalize_url, looks_like_category
+from .utils import BASE_URL, HEADERS, normalize_url, looks_like_category
 
 console = Console()
-HEADERS = {"User-Agent": "Mozilla/5.0 compatible; HahishookSwitcher/0.1; polite catalog scraper"}
 
 async def fetch(client: httpx.AsyncClient, url: str) -> str:
     r = await client.get(url, headers=HEADERS, follow_redirects=True, timeout=30)

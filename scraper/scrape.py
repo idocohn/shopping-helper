@@ -12,9 +12,7 @@ from bs4 import BeautifulSoup
 from rich.progress import Progress
 from .discover import discover_categories
 from .models import Product
-from .utils import BASE_URL, clean_text, normalize_url, price_to_float
-
-HEADERS = {"User-Agent": "Mozilla/5.0 compatible; HahishookSwitcher/0.1; polite catalog scraper"}
+from .utils import BASE_URL, HEADERS, clean_text, normalize_url, price_to_float
 
 async def fetch(client: httpx.AsyncClient, url: str) -> str:
     r = await client.get(url, headers=HEADERS, follow_redirects=True, timeout=45)
