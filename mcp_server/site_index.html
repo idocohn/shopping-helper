@@ -2,33 +2,121 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Hahishook Catalog &mdash; Open Data</title>
-<meta name="description" content="Unofficial, nightly-updated static mirror of the hahishook.com product catalog. AI-friendly JSON.">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hahishook Catalog &mdash; Search</title>
+<meta name="description" content="Searchable static mirror of the hahishook.com product catalog. Updated nightly.">
 <style>
-  body { font-family: system-ui, -apple-system, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; line-height: 1.55; color: #1a1a1a; }
-  h1 { margin-bottom: 0.25rem; }
-  h2 { margin-top: 2rem; }
-  code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-size: 0.95em; }
-  pre { background: #f4f4f4; padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.9em; }
-  a { color: #0a58ca; }
-  .meta { color: #555; font-size: 0.9em; margin-top: 0; }
-  .badge { display: inline-block; background: #e7f1ff; color: #0a58ca; padding: 2px 8px; border-radius: 999px; font-size: 0.8em; }
+  :root {
+    --bg: #fafafa;
+    --fg: #1a1a1a;
+    --muted: #666;
+    --border: #e5e5e5;
+    --card: #fff;
+    --accent: #0a58ca;
+    --accent-light: #e7f1ff;
+    --badge: #fff3cd;
+    --badge-fg: #856404;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background: var(--bg); color: var(--fg); line-height: 1.4; }
+  header { background: #fff; border-bottom: 1px solid var(--border); padding: 1rem 1.25rem; position: sticky; top: 0; z-index: 10; }
+  header h1 { margin: 0; font-size: 1.25rem; }
+  header .sub { color: var(--muted); font-size: 0.85rem; margin-top: 0.15rem; }
+  header .sub a { color: var(--accent); text-decoration: none; }
+  main { max-width: 1280px; margin: 0 auto; padding: 1rem 1.25rem 3rem; }
+  .controls { display: grid; grid-template-columns: 1fr; gap: 0.6rem; margin-bottom: 1rem; }
+  @media (min-width: 720px) {
+    .controls { grid-template-columns: 2fr 1fr 1fr 1fr auto; align-items: end; }
+  }
+  .field { display: flex; flex-direction: column; gap: 0.2rem; }
+  .field label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .field input, .field select { padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; background: #fff; color: var(--fg); }
+  .field input:focus, .field select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .checkbox { display: flex; align-items: center; gap: 0.4rem; padding-bottom: 0.55rem; }
+  .summary { display: flex; justify-content: space-between; align-items: center; margin: 0.5rem 0 1rem; font-size: 0.9rem; color: var(--muted); flex-wrap: wrap; gap: 0.5rem; }
+  .summary .right { color: var(--muted); font-size: 0.8rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.85rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; transition: box-shadow 0.15s; }
+  .card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .card .image-wrap { aspect-ratio: 1 / 1; background: #f5f5f5; border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .card img { width: 100%; height: 100%; object-fit: contain; }
+  .card .no-image { color: #ccc; font-size: 0.85rem; }
+  .card h3 { margin: 0; font-size: 0.95rem; line-height: 1.25; direction: rtl; text-align: right; min-height: 2.4em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card .size { font-size: 0.78rem; color: var(--muted); direction: rtl; text-align: right; min-height: 1.1em; }
+  .card .price-row { display: flex; align-items: baseline; gap: 0.4rem; margin-top: 0.15rem; }
+  .card .price { font-size: 1.1rem; font-weight: 600; color: var(--fg); }
+  .card .unit { font-size: 0.75rem; color: var(--muted); direction: rtl; }
+  .card .meta { font-size: 0.72rem; color: var(--muted); direction: rtl; text-align: right; min-height: 1em; }
+  .card a.open { margin-top: auto; font-size: 0.82rem; color: var(--accent); text-decoration: none; padding-top: 0.4rem; border-top: 1px solid var(--border); }
+  .card a.open:hover { text-decoration: underline; }
+  .card .out-of-stock { display: inline-block; background: var(--badge); color: var(--badge-fg); padding: 1px 6px; border-radius: 4px; font-size: 0.7rem; }
+  .empty, .loading { text-align: center; color: var(--muted); padding: 3rem 1rem; }
+  .empty code { background: #f0f0f0; padding: 1px 5px; border-radius: 3px; }
+  .pagination { display: flex; justify-content: center; gap: 0.4rem; margin-top: 1.5rem; flex-wrap: wrap; }
+  .pagination button { padding: 0.4rem 0.75rem; border: 1px solid var(--border); background: #fff; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+  .pagination button:hover:not(:disabled) { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
+  .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .pagination .current { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .devs { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.85rem; }
+  .devs summary { cursor: pointer; font-weight: 500; color: var(--fg); }
+  .devs pre { background: #f4f4f4; padding: 0.75rem; border-radius: 6px; overflow-x: auto; font-size: 0.8rem; }
+  .devs code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 0.85rem; }
 </style>
 </head>
 <body>
-<h1>Hahishook Catalog</h1>
-<p class="meta"><span class="badge">unofficial</span> Nightly-updated static mirror of the public product catalog at <a href="https://hahishook.com">hahishook.com</a>. Built by <a href="https://github.com/__OWNER__/__REPO__">github.com/__OWNER__/__REPO__</a>.</p>
+<header>
+  <h1>Hahishook Catalog</h1>
+  <div class="sub">
+    Unofficial static mirror of <a href="https://hahishook.com" target="_blank" rel="noopener">hahishook.com</a> &middot;
+    updated nightly &middot;
+    <a href="https://github.com/__OWNER__/__REPO__" target="_blank" rel="noopener">source</a>
+  </div>
+</header>
 
-<h2>Data files</h2>
-<ul>
-  <li><a href="products.json"><code>products.json</code></a> &mdash; full catalog as a JSON array</li>
-  <li><a href="categories.json"><code>categories.json</code></a> &mdash; every discovered category URL</li>
-  <li><a href="manifest.json"><code>manifest.json</code></a> &mdash; <code>{count, updated_at}</code></li>
-</ul>
+<main>
+  <div class="controls">
+    <div class="field">
+      <label for="q">Search (Hebrew works)</label>
+      <input id="q" type="search" placeholder="e.g. &#1496;&#1495;&#1497;&#1504;&#1492; / tahini / cashew" autofocus>
+    </div>
+    <div class="field">
+      <label for="category">Category</label>
+      <select id="category"><option value="">All</option></select>
+    </div>
+    <div class="field">
+      <label for="sort">Sort</label>
+      <select id="sort">
+        <option value="default">Default</option>
+        <option value="price-asc">Price &uarr;</option>
+        <option value="price-desc">Price &darr;</option>
+        <option value="name">Name (A&ndash;Z)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="max-price">Max price (&#8362;)</label>
+      <input id="max-price" type="number" min="0" step="0.5" placeholder="any">
+    </div>
+    <label class="checkbox"><input id="in-stock" type="checkbox" checked> In stock only</label>
+  </div>
 
-<h2>Use it from an AI assistant</h2>
-<p>Add the MCP server to your client's config (Claude Desktop, Cursor, Continue, etc.):</p>
-<pre>{
+  <div class="summary">
+    <span id="count">Loading&hellip;</span>
+    <span class="right" id="updated"></span>
+  </div>
+
+  <div id="grid" class="grid"></div>
+  <div id="pagination" class="pagination"></div>
+
+  <details class="devs">
+    <summary>For developers and AI assistants</summary>
+    <p>Raw data files (CORS-enabled, no auth):</p>
+    <ul>
+      <li><a href="products.json"><code>products.json</code></a> &mdash; full catalog as a JSON array</li>
+      <li><a href="categories.json"><code>categories.json</code></a> &mdash; every discovered category URL</li>
+      <li><a href="manifest.json"><code>manifest.json</code></a> &mdash; <code>{count, updated_at}</code></li>
+    </ul>
+    <p>An MCP server with <code>search_products</code>, <code>list_categories</code>, <code>get_product</code>, and <code>catalog_info</code> tools ships in the repo. Config snippet for Claude Desktop / Cursor / Continue:</p>
+    <pre>{
   "mcpServers": {
     "hahishook": {
       "command": "python",
@@ -39,28 +127,168 @@
     }
   }
 }</pre>
-<p>Tools exposed: <code>search_products</code>, <code>list_categories</code>, <code>get_product</code>, <code>catalog_info</code>.</p>
+  </details>
+</main>
 
-<h2>Or just <code>curl</code> it</h2>
-<pre>curl -s https://__OWNER__.github.io/__REPO__/products.json | jq '.[0]'</pre>
+<script>
+const PAGE_SIZE = 60;
+const state = {
+  products: [],
+  filtered: [],
+  page: 1,
+  q: "",
+  category: "",
+  sort: "default",
+  maxPrice: null,
+  inStock: true,
+};
 
-<h2>Product shape</h2>
-<pre>{
-  "source": "hahishook",
-  "product_id": "12345",
-  "name": "...",
-  "category": "...",
-  "size_text": "1 \u05e7\"\u05d2",
-  "price_nis": 7.80,
-  "unit_price_text": "0.78 \u20aa/100 \u05d2'",
-  "product_url": "https://hahishook.com/product/...",
-  "image_url": "...",
-  "in_stock": true,
-  "scraped_at": "2026-..."
-}</pre>
+const $ = (id) => document.getElementById(id);
+const grid = $("grid");
+const countEl = $("count");
+const updatedEl = $("updated");
+const paginationEl = $("pagination");
+const catSelect = $("category");
 
-<p style="margin-top:3rem;color:#888;font-size:0.85em;">
-This site mirrors only public catalog data. Prices and stock can vary by delivery warehouse; treat as informational. Source code is MIT-licensed.
-</p>
+function debounce(fn, ms) {
+  let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function applyFilters() {
+  const ql = state.q.trim().toLowerCase();
+  const cl = state.category.toLowerCase();
+  let out = state.products.filter((p) => {
+    if (ql) {
+      const hay = [p.name, p.category, p.size_text, p.brand].filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(ql)) return false;
+    }
+    if (cl && !(p.category || "").toLowerCase().includes(cl)) return false;
+    if (state.inStock && !p.in_stock) return false;
+    if (state.maxPrice != null) {
+      if (p.price_nis == null || p.price_nis > state.maxPrice) return false;
+    }
+    return true;
+  });
+  switch (state.sort) {
+    case "price-asc": out.sort((a, b) => (a.price_nis ?? Infinity) - (b.price_nis ?? Infinity)); break;
+    case "price-desc": out.sort((a, b) => (b.price_nis ?? -Infinity) - (a.price_nis ?? -Infinity)); break;
+    case "name": out.sort((a, b) => (a.name || "").localeCompare(b.name || "", "he")); break;
+  }
+  state.filtered = out;
+  state.page = 1;
+  render();
+}
+
+function render() {
+  const total = state.filtered.length;
+  countEl.textContent = total ? `${total.toLocaleString()} products` : "No products match your filters";
+  if (!total) {
+    grid.innerHTML = '<div class="empty">Nothing here. Try clearing filters or searching for something else.</div>';
+    paginationEl.innerHTML = "";
+    return;
+  }
+  const start = (state.page - 1) * PAGE_SIZE;
+  const slice = state.filtered.slice(start, start + PAGE_SIZE);
+  grid.innerHTML = slice.map((p) => {
+    const img = p.image_url
+      ? `<img src="${escapeHtml(p.image_url)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<span class=&quot;no-image&quot;>no image</span>'">`
+      : `<span class="no-image">no image</span>`;
+    const price = p.price_nis != null ? `\u20aa${p.price_nis.toFixed(2)}` : `<span style="color:var(--muted)">no price</span>`;
+    const stockBadge = p.in_stock === false ? '<span class="out-of-stock">out of stock</span>' : '';
+    return `
+      <article class="card">
+        <div class="image-wrap">${img}</div>
+        <h3 dir="rtl">${escapeHtml(p.name || "")}</h3>
+        <div class="size" dir="rtl">${escapeHtml(p.size_text || "")}</div>
+        <div class="price-row"><span class="price">${price}</span> <span class="unit">${escapeHtml(p.unit_price_text || "")}</span></div>
+        <div class="meta">${escapeHtml(p.category || "")} ${stockBadge}</div>
+        ${p.product_url ? `<a class="open" href="${escapeHtml(p.product_url)}" target="_blank" rel="noopener">Open on hahishook.com &rarr;</a>` : ""}
+      </article>`;
+  }).join("");
+  renderPagination(total);
+}
+
+function renderPagination(total) {
+  const pages = Math.ceil(total / PAGE_SIZE);
+  if (pages <= 1) { paginationEl.innerHTML = ""; return; }
+  const cur = state.page;
+  const btns = [];
+  btns.push(`<button ${cur === 1 ? "disabled" : ""} data-page="${cur - 1}">&larr; Prev</button>`);
+  const range = new Set([1, pages, cur - 1, cur, cur + 1]);
+  let last = 0;
+  for (let i = 1; i <= pages; i++) {
+    if (!range.has(i)) continue;
+    if (i - last > 1) btns.push(`<span style="padding:0.4rem 0.2rem;color:var(--muted)">&hellip;</span>`);
+    btns.push(`<button class="${i === cur ? "current" : ""}" data-page="${i}">${i}</button>`);
+    last = i;
+  }
+  btns.push(`<button ${cur === pages ? "disabled" : ""} data-page="${cur + 1}">Next &rarr;</button>`);
+  paginationEl.innerHTML = btns.join("");
+}
+
+paginationEl.addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-page]");
+  if (!b || b.disabled) return;
+  state.page = Number(b.dataset.page);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  render();
+});
+
+$("q").addEventListener("input", debounce((e) => { state.q = e.target.value; applyFilters(); }, 200));
+$("category").addEventListener("change", (e) => { state.category = e.target.value; applyFilters(); });
+$("sort").addEventListener("change", (e) => { state.sort = e.target.value; applyFilters(); });
+$("max-price").addEventListener("input", debounce((e) => {
+  const v = parseFloat(e.target.value);
+  state.maxPrice = Number.isFinite(v) ? v : null;
+  applyFilters();
+}, 200));
+$("in-stock").addEventListener("change", (e) => { state.inStock = e.target.checked; applyFilters(); });
+
+async function init() {
+  try {
+    const [productsRes, manifestRes] = await Promise.all([
+      fetch("products.json", { cache: "no-cache" }),
+      fetch("manifest.json", { cache: "no-cache" }).catch(() => null),
+    ]);
+    if (!productsRes.ok) throw new Error(`Failed to load products.json (${productsRes.status})`);
+    state.products = await productsRes.json();
+    const counts = new Map();
+    for (const p of state.products) {
+      const c = (p.category || "").trim();
+      if (!c) continue;
+      counts.set(c, (counts.get(c) || 0) + 1);
+    }
+    const cats = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    for (const [cat, n] of cats) {
+      const opt = document.createElement("option");
+      opt.value = cat;
+      opt.textContent = `${cat} (${n})`;
+      catSelect.appendChild(opt);
+    }
+    if (manifestRes && manifestRes.ok) {
+      const m = await manifestRes.json();
+      if (m.updated_at) {
+        const d = new Date(m.updated_at);
+        if (!Number.isNaN(d.getTime())) {
+          updatedEl.textContent = `Updated ${d.toLocaleString()}`;
+        }
+      }
+    }
+    applyFilters();
+  } catch (err) {
+    grid.innerHTML = `<div class="empty">Failed to load catalog: ${escapeHtml(err.message)}.<br><br>If this is the first deploy, wait for the <code>Update catalog</code> workflow to finish.</div>`;
+    countEl.textContent = "Error";
+  }
+}
+
+init();
+</script>
 </body>
 </html>
