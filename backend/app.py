@@ -43,10 +43,22 @@ def categories():
     return [{"category": k, "count": v} for k, v in sorted(counts.items(), key=lambda x: -x[1])]
 
 
+@app.get("/api/sources")
+def sources():
+    rows = _catalog_rows()
+    counts: dict[str, int] = {}
+    for r in rows:
+        s = r.get("source") or ""
+        if s:
+            counts[s] = counts.get(s, 0) + 1
+    return [{"source": k, "count": v} for k, v in sorted(counts.items(), key=lambda x: -x[1])]
+
+
 @app.get("/api/products")
 def products(
     q: str = "",
     category: str = "",
+    source: str = "",
     in_stock: bool | None = None,
     min_price: float | None = None,
     max_price: float | None = None,
@@ -58,13 +70,16 @@ def products(
         return {"total": 0, "items": []}
     ql = q.strip().lower()
     cl = category.strip().lower()
+    sl = source.strip().lower()
 
     def keep(r: dict) -> bool:
         if ql:
-            hay = " ".join(str(r.get(f) or "") for f in ("name", "category", "size_text", "brand")).lower()
+            hay = " ".join(str(r.get(f) or "") for f in ("name", "category", "size_text", "brand", "source")).lower()
             if ql not in hay:
                 return False
         if cl and cl not in (r.get("category") or "").lower():
+            return False
+        if sl and (r.get("source") or "").lower() != sl:
             return False
         if in_stock is not None and bool(r.get("in_stock")) != in_stock:
             return False

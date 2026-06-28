@@ -50,6 +50,7 @@
   .card a.open { margin-top: auto; font-size: 0.82rem; color: var(--accent); text-decoration: none; padding-top: 0.4rem; border-top: 1px solid var(--border); }
   .card a.open:hover { text-decoration: underline; }
   .card .out-of-stock { display: inline-block; background: var(--badge); color: var(--badge-fg); padding: 1px 6px; border-radius: 4px; font-size: 0.7rem; }
+  .card .source-badge { display: inline-block; background: var(--accent-light); color: var(--accent); padding: 1px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 500; text-transform: lowercase; }
   .empty, .loading { text-align: center; color: var(--muted); padding: 3rem 1rem; }
   .empty code { background: #f0f0f0; padding: 1px 5px; border-radius: 3px; }
   .pagination { display: flex; justify-content: center; gap: 0.4rem; margin-top: 1.5rem; flex-wrap: wrap; }
@@ -91,6 +92,10 @@
         <option value="price-desc">Price &darr;</option>
         <option value="name">Name (A&ndash;Z)</option>
       </select>
+    </div>
+    <div class="field">
+      <label for="source">Source</label>
+      <select id="source"><option value="">All sources</option></select>
     </div>
     <div class="field">
       <label for="max-price">Max price (&#8362;)</label>
@@ -138,6 +143,7 @@ const state = {
   page: 1,
   q: "",
   category: "",
+  source: "",
   sort: "default",
   maxPrice: null,
   inStock: true,
@@ -149,6 +155,7 @@ const countEl = $("count");
 const updatedEl = $("updated");
 const paginationEl = $("pagination");
 const catSelect = $("category");
+const sourceSelect = $("source");
 
 function debounce(fn, ms) {
   let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
@@ -164,12 +171,14 @@ function escapeHtml(s) {
 function applyFilters() {
   const ql = state.q.trim().toLowerCase();
   const cl = state.category.toLowerCase();
+  const sl = state.source.toLowerCase();
   let out = state.products.filter((p) => {
     if (ql) {
-      const hay = [p.name, p.category, p.size_text, p.brand].filter(Boolean).join(" ").toLowerCase();
+      const hay = [p.name, p.category, p.size_text, p.brand, p.source].filter(Boolean).join(" ").toLowerCase();
       if (!hay.includes(ql)) return false;
     }
     if (cl && !(p.category || "").toLowerCase().includes(cl)) return false;
+    if (sl && (p.source || "").toLowerCase() !== sl) return false;
     if (state.inStock && !p.in_stock) return false;
     if (state.maxPrice != null) {
       if (p.price_nis == null || p.price_nis > state.maxPrice) return false;
@@ -202,14 +211,15 @@ function render() {
       : `<span class="no-image">no image</span>`;
     const price = p.price_nis != null ? `\u20aa${p.price_nis.toFixed(2)}` : `<span style="color:var(--muted)">no price</span>`;
     const stockBadge = p.in_stock === false ? '<span class="out-of-stock">out of stock</span>' : '';
+    const sourceBadge = p.source ? `<span class="source-badge">${escapeHtml(p.source)}</span>` : '';
     return `
       <article class="card">
         <div class="image-wrap">${img}</div>
         <h3 dir="rtl">${escapeHtml(p.name || "")}</h3>
         <div class="size" dir="rtl">${escapeHtml(p.size_text || "")}</div>
         <div class="price-row"><span class="price">${price}</span> <span class="unit">${escapeHtml(p.unit_price_text || "")}</span></div>
-        <div class="meta">${escapeHtml(p.category || "")} ${stockBadge}</div>
-        ${p.product_url ? `<a class="open" href="${escapeHtml(p.product_url)}" target="_blank" rel="noopener">Open on hahishook.com &rarr;</a>` : ""}
+        <div class="meta">${sourceBadge} ${escapeHtml(p.category || "")} ${stockBadge}</div>
+        ${p.product_url ? `<a class="open" href="${escapeHtml(p.product_url)}" target="_blank" rel="noopener">Open product &rarr;</a>` : ""}
       </article>`;
   }).join("");
   renderPagination(total);
@@ -243,6 +253,7 @@ paginationEl.addEventListener("click", (e) => {
 
 $("q").addEventListener("input", debounce((e) => { state.q = e.target.value; applyFilters(); }, 200));
 $("category").addEventListener("change", (e) => { state.category = e.target.value; applyFilters(); });
+$("source").addEventListener("change", (e) => { state.source = e.target.value; applyFilters(); });
 $("sort").addEventListener("change", (e) => { state.sort = e.target.value; applyFilters(); });
 $("max-price").addEventListener("input", debounce((e) => {
   const v = parseFloat(e.target.value);
@@ -260,10 +271,12 @@ async function init() {
     if (!productsRes.ok) throw new Error(`Failed to load products.json (${productsRes.status})`);
     state.products = await productsRes.json();
     const counts = new Map();
+    const sourceCounts = new Map();
     for (const p of state.products) {
       const c = (p.category || "").trim();
-      if (!c) continue;
-      counts.set(c, (counts.get(c) || 0) + 1);
+      if (c) counts.set(c, (counts.get(c) || 0) + 1);
+      const s = (p.source || "").trim();
+      if (s) sourceCounts.set(s, (sourceCounts.get(s) || 0) + 1);
     }
     const cats = [...counts.entries()].sort((a, b) => b[1] - a[1]);
     for (const [cat, n] of cats) {
@@ -271,6 +284,13 @@ async function init() {
       opt.value = cat;
       opt.textContent = `${cat} (${n})`;
       catSelect.appendChild(opt);
+    }
+    const srcs = [...sourceCounts.entries()].sort((a, b) => b[1] - a[1]);
+    for (const [src, n] of srcs) {
+      const opt = document.createElement("option");
+      opt.value = src;
+      opt.textContent = `${src} (${n.toLocaleString()})`;
+      sourceSelect.appendChild(opt);
     }
     if (manifestRes && manifestRes.ok) {
       const m = await manifestRes.json();

@@ -68,16 +68,18 @@ def _text_match(row: dict, query: str) -> bool:
 def search_products(
     query: str = "",
     category: str | None = None,
+    source: str | None = None,
     in_stock: bool | None = None,
     min_price: float | None = None,
     max_price: float | None = None,
     limit: int = 20,
 ) -> dict:
-    """Search the Hahishook catalog.
+    """Search the merged grocery catalog (Hahishook + Shufersal + ...).
 
     Args:
         query: Free-text match against name, category, size, brand. Hebrew works.
         category: Substring filter on category name.
+        source: Exact match on source (e.g. "hahishook", "shufersal").
         in_stock: If true, only show products marked in stock.
         min_price: Minimum price in NIS.
         max_price: Maximum price in NIS.
@@ -88,10 +90,13 @@ def search_products(
     """
     rows = _load()
     out = []
+    src_l = source.lower() if source else None
     for r in rows:
         if not _text_match(r, query):
             continue
         if category and category.lower() not in (r.get("category") or "").lower():
+            continue
+        if src_l and (r.get("source") or "").lower() != src_l:
             continue
         if in_stock is not None and bool(r.get("in_stock")) != in_stock:
             continue
@@ -103,6 +108,21 @@ def search_products(
         out.append(r)
     limit = max(1, min(limit, 100))
     return {"total": len(out), "items": out[:limit]}
+
+
+@mcp.tool()
+def list_sources() -> list[dict]:
+    """List every source in the catalog (e.g. shufersal, hahishook) with product counts."""
+    rows = _load()
+    counts: dict[str, int] = {}
+    for r in rows:
+        s = r.get("source") or ""
+        if s:
+            counts[s] = counts.get(s, 0) + 1
+    return [
+        {"source": k, "count": v}
+        for k, v in sorted(counts.items(), key=lambda x: -x[1])
+    ]
 
 
 @mcp.tool()

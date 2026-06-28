@@ -1,27 +1,37 @@
-# Hahishook Switcher
+# Israeli Grocery Catalog
 
-A starter toolkit for building a cheaper-grocery comparison around
-[hahishook.com](https://hahishook.com). It scrapes the public WooCommerce
-catalog, stores it locally (JSON + CSV + SQLite), serves it over a small
-FastAPI search backend, and ships a tiny React UI plus a basket-matching CLI.
+A multi-source grocery price catalog for Israel. Pulls product data from:
+
+| Source | How | Volume per run |
+| --- | --- | --- |
+| **hahishook.com** (Hahishook co-op) | HTML scraper of the public WooCommerce storefront | ~600 SKUs |
+| **prices.shufersal.co.il** (Shufersal) | Official price-transparency XML feed (per store) | ~6,000+ SKUs per store |
+| _(more chains coming &mdash; the transparency feeds are mandated by law for every chain over a certain size, same XML schema)_ | | |
+
+Outputs a unified `data/products.json|csv|sqlite` catalog, serves it via a
+FastAPI search backend, ships a tiny static interactive site to GitHub Pages,
+and exposes the data to AI assistants via an MCP server.
 
 ## What's in the box
 
 ```text
-scraper/        Async httpx + BeautifulSoup crawler
-  discover.py     Walks the site to find every /product-category/ URL
-  scrape.py       Paginates each category and extracts product cards
-  models.py       Pydantic Product schema
-  utils.py        URL + price helpers
+sources/
+  shufersal.py    Pulls latest PriceFull XML per store from the transparency portal
+scraper/          (Hahishook-specific) Async httpx + BeautifulSoup crawler
+  discover.py       Walks the site to find every /product-category/ URL
+  scrape.py         Paginates each category and extracts product cards
+  models.py         Pydantic Product schema (shared across sources)
+  utils.py          URL + price helpers, browser-like HTTP headers
+build_catalog.py  Orchestrator: runs every source, merges, writes data/*
 matching/
   match_basket.py rapidfuzz-based basket -> catalog matcher (CSV/XLSX)
 backend/
   app.py          FastAPI server with cached catalog + search endpoints
 webapp/         Vite + React UI (search, category filter, basket upload)
-mcp_server/     MCP stdio server for AI assistants (Claude Desktop, Cursor, ...)
+mcp_server/     MCP stdio server + GitHub Pages landing page template
 tests/
-  smoke_check.py  Stdlib-only sanity check that the live site selectors match
-data/           Scraped outputs land here (gitignored content)
+  smoke_check.py  Stdlib-only sanity check that Hahishook selectors match
+data/           Built catalog lands here (committed back by the nightly Action)
 ```
 
 ## Requirements
@@ -39,36 +49,57 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Sanity-check the site selectors (no install required)
+### Sanity-check (no install required)
 
 ```bash
 python tests/smoke_check.py
 ```
 
-This uses only the Python stdlib and confirms that the live Hahishook HTML
-still uses the WooCommerce class names the scraper relies on.
+Stdlib-only; confirms the live Hahishook HTML still uses the WooCommerce
+class names the scraper relies on.
 
-### Scrape the whole site
+### Build the merged catalog
 
 ```bash
-python -m scraper.scrape --discover
+python build_catalog.py
 ```
 
-This walks the site to find every category, then paginates each one and
-writes:
+This runs every configured source (Hahishook scraper + Shufersal feed),
+tags each product with its `source`, dedupes within source, and writes:
 
 ```text
-data/categories.json    list of every discovered category URL
-data/products.json      full catalog as JSON
+data/categories.json    list of discovered Hahishook category URLs
+data/products.json      merged catalog as JSON (with `source` field)
 data/products.csv       same, as UTF-8 BOM CSV (Excel-friendly)
 data/catalog.sqlite     same, as a SQLite table called `products`
 ```
 
-If you already have `data/categories.json`, just run `python -m scraper.scrape`
-and it will reuse it. Pass `--limit N` to scrape only the first N categories
-while iterating.
+Useful options:
 
-### Serve the catalog
+```bash
+python build_catalog.py --only hahishook            # one source only
+python build_catalog.py --only shufersal            # one source only
+python build_catalog.py --only hahishook shufersal  # explicit list
+```
+
+If one source fails (network blip, schema change), the others still run and
+the partial catalog is still written; the workflow only fails if **every**
+source failed.
+
+### Adding a new source
+
+1. Create `sources/<name>.py` with a `scrape(...) -> list[Product]` function
+   that sets `source="<name>"` on every record it returns.
+2. Add an entry to the `SOURCES` list in [build_catalog.py](build_catalog.py).
+3. Done &mdash; the workflow, the API, the UI source filter, and the MCP
+   tools all pick it up automatically because they read `source` from the
+   data.
+
+The Israeli price-transparency feeds (Rami Levy, Victory, Yochananof,
+Tiv Taam, Mega, ...) all use the same XML schema as Shufersal, so adding
+each one is mostly: change the portal URL and re-use `_parse_xml`.
+
+### Serve the catalog locally
 
 ```bash
 uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
@@ -76,17 +107,18 @@ uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
 
 Endpoints:
 
-| Method | Path              | What it returns                                                                 |
-| ------ | ----------------- | ------------------------------------------------------------------------------- |
-| GET    | `/api/health`     | `{ok, products, catalog_exists}`                                                |
-| GET    | `/api/categories` | `[{category, count}, …]` sorted by count                                        |
-| GET    | `/api/products`   | `{total, items}` with filters `q`, `category`, `in_stock`, `min_price`, `max_price`, `limit`, `offset` |
-| POST   | `/api/match`      | multipart `file` (CSV/XLSX basket), returns fuzzy matches against the catalog   |
+| Method | Path | What it returns |
+| --- | --- | --- |
+| GET | `/api/health` | `{ok, products, catalog_exists}` |
+| GET | `/api/sources` | `[{source, count}, ...]` |
+| GET | `/api/categories` | `[{category, count}, ...]` |
+| GET | `/api/products` | `{total, items}` with filters `q`, `category`, `source`, `in_stock`, `min_price`, `max_price`, `limit`, `offset` |
+| POST | `/api/match` | multipart `file` (CSV/XLSX basket), returns fuzzy matches against the catalog |
 
 Example:
 
 ```bash
-curl "http://localhost:8000/api/products?q=%D7%98%D7%97%D7%99%D7%A0%D7%94&limit=10"
+curl "http://localhost:8000/api/products?source=shufersal&q=%D7%98%D7%97%D7%99%D7%A0%D7%94&limit=10"
 ```
 
 ### Run the web UI

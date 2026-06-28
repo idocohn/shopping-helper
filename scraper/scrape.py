@@ -140,9 +140,13 @@ async def scrape_category(client: httpx.AsyncClient, url: str) -> list[Product]:
     return products
 
 def dedupe(products: list[Product]) -> list[Product]:
+    """Deduplicate within a source — different sources can ship the same item
+    at different prices, so source is always part of the key."""
     out = {}
     for p in products:
-        key = p.product_id or f"{p.name}|{p.size_text}|{p.price_nis}|{p.product_url}"
+        key = (p.source, p.product_id) if p.product_id else (
+            p.source, p.name, p.size_text, p.price_nis, p.product_url,
+        )
         if key not in out:
             out[key] = p
     return list(out.values())
@@ -167,6 +171,36 @@ def write_outputs(products: list[Product], outdir: Path) -> None:
     ])
     con.commit(); con.close()
 
+async def scrape_hahishook(
+    categories_path: Path | None = Path("data/categories.json"),
+    discover_first: bool = False,
+    limit: int = 0,
+) -> list[Product]:
+    """High-level entry point: optionally discover categories, scrape them all,
+    dedupe, return the product list. Does not write any files."""
+    if categories_path and not discover_first and categories_path.exists():
+        categories = json.loads(categories_path.read_text(encoding="utf-8"))
+    else:
+        print("Discovering Hahishook categories...")
+        categories = await discover_categories()
+        if categories_path:
+            categories_path.parent.mkdir(parents=True, exist_ok=True)
+            categories_path.write_text(
+                json.dumps(categories, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+    if limit:
+        categories = categories[:limit]
+    print(f"Scraping {len(categories)} Hahishook categories")
+    all_products: list[Product] = []
+    async with httpx.AsyncClient() as client:
+        with Progress() as progress:
+            task = progress.add_task("Hahishook", total=len(categories))
+            for url in categories:
+                all_products.extend(await scrape_category(client, url))
+                progress.advance(task)
+    return dedupe(all_products)
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--categories", default="data/categories.json", help="JSON list of category URLs. Auto-discovered if missing.")
@@ -174,25 +208,11 @@ async def main() -> None:
     parser.add_argument("--limit", type=int, default=0, help="Limit categories for testing")
     parser.add_argument("--discover", action="store_true", help="Force re-discovery even if categories file exists")
     args = parser.parse_args()
-    cat_path = Path(args.categories)
-    if args.discover or not cat_path.exists():
-        print("Discovering categories...")
-        categories = await discover_categories()
-        cat_path.parent.mkdir(parents=True, exist_ok=True)
-        cat_path.write_text(json.dumps(categories, ensure_ascii=False, indent=2), encoding="utf-8")
-    else:
-        categories = json.loads(cat_path.read_text(encoding="utf-8"))
-    if args.limit:
-        categories = categories[:args.limit]
-    print(f"Scraping {len(categories)} categories")
-    all_products: list[Product] = []
-    async with httpx.AsyncClient() as client:
-        with Progress() as progress:
-            task = progress.add_task("Scraping categories", total=len(categories))
-            for url in categories:
-                all_products.extend(await scrape_category(client, url))
-                progress.advance(task)
-    products = dedupe(all_products)
+    products = await scrape_hahishook(
+        categories_path=Path(args.categories),
+        discover_first=args.discover,
+        limit=args.limit,
+    )
     write_outputs(products, Path(args.outdir))
     print(f"Wrote {len(products)} products to {args.outdir}")
 
