@@ -25,6 +25,22 @@ jobs:
         run: pip install -r requirements.txt
       - name: Build merged catalog (all sources)
         run: python build_catalog.py --outdir data
+      - name: Revert data if Hahishook scrape failed
+        # GH Actions runners get 403'd by Hahishook's WAF, so on bad days the
+        # only source that succeeds is Shufersal. Don't overwrite the catalog
+        # with a partial result - revert and let the previous data stand.
+        run: |
+          set -e
+          python - <<'PY'
+          import json, sys, subprocess, collections
+          rows = json.load(open('data/products.json', encoding='utf-8'))
+          counts = collections.Counter(r.get('source') for r in rows)
+          print(f'Source counts this run: {dict(counts)}')
+          if counts.get('hahishook', 0) == 0:
+              print('Hahishook returned 0 items - reverting data/ to preserve previous catalog.')
+              subprocess.run(['git', 'checkout', '--', 'data/'], check=True)
+              sys.exit(0)
+          PY
       - name: Build static site for GitHub Pages
         env:
           REPO_OWNER: ${{ github.repository_owner }}
