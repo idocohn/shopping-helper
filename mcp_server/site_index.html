@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hahishook Catalog &mdash; Open Data</title>
+<meta name="description" content="Unofficial, nightly-updated static mirror of the hahishook.com product catalog. AI-friendly JSON.">
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; line-height: 1.55; color: #1a1a1a; }
+  h1 { margin-bottom: 0.25rem; }
+  h2 { margin-top: 2rem; }
+  code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-size: 0.95em; }
+  pre { background: #f4f4f4; padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.9em; }
+  a { color: #0a58ca; }
+  .meta { color: #555; font-size: 0.9em; margin-top: 0; }
+  .badge { display: inline-block; background: #e7f1ff; color: #0a58ca; padding: 2px 8px; border-radius: 999px; font-size: 0.8em; }
+</style>
+</head>
+<body>
+<h1>Hahishook Catalog</h1>
+<p class="meta"><span class="badge">unofficial</span> Nightly-updated static mirror of the public product catalog at <a href="https://hahishook.com">hahishook.com</a>. Built by <a href="https://github.com/__OWNER__/__REPO__">github.com/__OWNER__/__REPO__</a>.</p>
+
+<h2>Data files</h2>
+<ul>
+  <li><a href="products.json"><code>products.json</code></a> &mdash; full catalog as a JSON array</li>
+  <li><a href="categories.json"><code>categories.json</code></a> &mdash; every discovered category URL</li>
+  <li><a href="manifest.json"><code>manifest.json</code></a> &mdash; <code>{count, updated_at}</code></li>
+</ul>
+
+<h2>Use it from an AI assistant</h2>
+<p>Add the MCP server to your client's config (Claude Desktop, Cursor, Continue, etc.):</p>
+<pre>{
+  "mcpServers": {
+    "hahishook": {
+      "command": "python",
+      "args": ["-m", "mcp_server.server"],
+      "env": {
+        "HAHISHOOK_CATALOG_URL": "https://__OWNER__.github.io/__REPO__/products.json"
+      }
+    }
+  }
+}</pre>
+<p>Tools exposed: <code>search_products</code>, <code>list_categories</code>, <code>get_product</code>, <code>catalog_info</code>.</p>
+
+<h2>Or just <code>curl</code> it</h2>
+<pre>curl -s https://__OWNER__.github.io/__REPO__/products.json | jq '.[0]'</pre>
+
+<h2>Product shape</h2>
+<pre>{
+  "source": "hahishook",
+  "product_id": "12345",
+  "name": "...",
+  "category": "...",
+  "size_text": "1 \u05e7\"\u05d2",
+  "price_nis": 7.80,
+  "unit_price_text": "0.78 \u20aa/100 \u05d2'",
+  "product_url": "https://hahishook.com/product/...",
+  "image_url": "...",
+  "in_stock": true,
+  "scraped_at": "2026-..."
+}</pre>
+
+<p style="margin-top:3rem;color:#888;font-size:0.85em;">
+This site mirrors only public catalog data. Prices and stock can vary by delivery warehouse; treat as informational. Source code is MIT-licensed.
+</p>
+</body>
+</html>

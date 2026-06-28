@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# User-uploaded basket files and local match output (do NOT ignore the
+# scraped catalog files - the nightly GH Action commits them back).
+data/uploaded_*
+data/basket_matches.csv
+
+# Node / Vite
+node_modules/
+webapp/dist/
+.vite/
+
+# GitHub Pages local build
+_site/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
