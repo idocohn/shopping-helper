@@ -95,9 +95,31 @@ source failed.
    tools all pick it up automatically because they read `source` from the
    data.
 
-The Israeli price-transparency feeds (Rami Levy, Victory, Yochananof,
-Tiv Taam, Mega, ...) all use the same XML schema as Shufersal, so adding
-each one is mostly: change the portal URL and re-use `_parse_xml`.
+#### Chains worth adding (Israeli price-transparency portals)
+
+Israeli law mandates that every grocery chain above a certain size publishes
+daily price files. The schema is consistent (`PriceFull*.gz` -> XML with an
+`<Items><Item>` tree), but each chain hosts on one of three different portal
+platforms. Pick a chain, inspect its portal, copy [sources/shufersal.py](sources/shufersal.py)
+as a starting point, swap the listing-URL function for the right platform.
+
+Top-level gov directory of every legally-published portal:
+[gov.il/he/pages/cpfta_shkifot_kishorim](https://www.gov.il/he/pages/cpfta_shkifot_kishorim).
+
+| Platform | Portal | Status | What to copy from `shufersal.py` |
+| --- | --- | --- | --- |
+| **Cerberus / FileObject** (signed Azure Blob URLs, `?catID=2&storeId=N`) | [prices.shufersal.co.il](https://prices.shufersal.co.il/) | done | -- |
+| **Direct date-folder** (no auth, `/YYYYMMDD/PriceFull...gz`) | [prices.carrefour.co.il](https://prices.carrefour.co.il/) | TODO | Replace `latest_price_full_url` with a small lister that walks the date folders. `_parse_xml` is reusable as-is. |
+| **Laib catalog** (JS-rendered table, XHR-backed) | [laibcatalog.co.il/victory](https://laibcatalog.co.il/victory/index.html) | TODO | Find the XHR endpoint the page calls (DevTools Network tab). It typically returns JSON listing the GZ URLs. Replace `latest_price_full_url`; reuse `_parse_xml`. |
+| **publishedprices.co.il** (Cerberus, login-walled, anonymous-friendly creds) | [Rami Levy](https://www.rami-levy.co.il/he/price-transparency) -> `url.retail.publishedprices.co.il/login` (user `RamiLevi`, blank password); also hosts Yochananof, Hatzi Hinam, Stop Market, others | TODO | Adds a login step: POST to `/login/user` to get a session cookie, then GET `/file/d/{filename}`. Stash creds in `os.environ`. |
+
+Validation aggregators (good for sanity-checking, but **not** raw feeds &mdash;
+don't scrape these as sources): [pricez.co.il](https://www.pricez.co.il/),
+[israbis.com](https://israbis.com/en).
+
+Ecommerce sites (Carrefour online, Shufersal online, Victory online) are
+JS-heavy and exist behind the same brands &mdash; always prefer the price-file
+portal above.
 
 ### Serve the catalog locally
 
