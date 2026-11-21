@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.openai.com; img-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Compare a basket · Shopping Helper</title>
   <link rel="stylesheet" href="./style.css">
-  <script type="module" src="./app.mjs"></script>
+  <script type="module" src="./app.mjs?v=2"></script>
 </head>
 <body>
   <main>
@@ -16,7 +16,7 @@
     <section>
       <h2>1. Import your order</h2>
       <label for="receipt">Receipt or order file</label>
-      <input id="receipt" type="file" accept=".pdf,application/pdf,image/jpeg,image/png,image/webp">
+      <input id="receipt" type="file" accept=".pdf,application/pdf,image/jpeg,image/png,image/webp" disabled>
       <p class="hint">Choose a PDF or a JPG, PNG or WebP photo. Shufersal text PDFs import directly. For other files, review the preview before using AI, or paste the product lines.</p>
       <div id="extract" hidden>
         <div id="text-review">
@@ -28,7 +28,7 @@
           <img id="receipt-preview" alt="Preview of the selected receipt photo">
           <p class="hint">AI extraction sends the entire photo to OpenAI. Crop out personal and payment details before selecting the file.</p>
         </div>
-        <button id="extract-ai" type="button" class="secondary">Extract items with AI</button>
+        <button id="extract-ai" type="button" class="secondary" disabled>Extract items with AI</button>
       </div>
       <label for="basket">Basket items</label>
       <textarea id="basket" rows="7" dir="auto" placeholder="מיונז אמיתי הלמנס | 2 | 394 גרם"></textarea>
@@ -40,8 +40,8 @@
       <input id="api-key" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="sk-…" aria-describedby="key-note">
       <p class="hint" id="key-note">The browser sends the key directly to OpenAI for each AI action and clears this field. This site never saves it. OpenAI usage is billed to your account.</p>
       <div class="actions">
-        <button id="compare-ai" type="button">Compare with AI</button>
-        <button id="compare-local" type="button" class="secondary">Compare without AI</button>
+        <button id="compare-ai" type="button" disabled>Compare with AI</button>
+        <button id="compare-local" type="button" class="secondary" disabled>Compare without AI</button>
       </div>
     </section>
     <p id="status" role="status" aria-live="polite"></p>

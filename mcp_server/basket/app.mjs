@@ -293,3 +293,5 @@ function render() {
   }));
   $('results').hidden = false;
 }
+
+controls.forEach(id => { $(id).disabled = false; });
