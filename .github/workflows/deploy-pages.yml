@@ -10,6 +10,9 @@ on:
       - 'build_pages.py'
       - '.github/workflows/deploy-pages.yml'
       - 'mcp_server/site_index.html'
+      - 'mcp_server/basket/**'
+      - 'mcp_server/package*.json'
+      - 'tests/basket.test.mjs'
   workflow_dispatch:
 
 permissions:
@@ -26,6 +29,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix mcp_server --omit=optional
+      - run: node --test tests/basket.test.mjs
       - name: Build static site from the catalog
         env:
           REPO_OWNER: ${{ github.repository_owner }}

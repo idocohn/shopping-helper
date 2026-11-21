@@ -1,0 +1,7 @@
+{
+  "name": "shopping-helper-pages",
+  "private": true,
+  "dependencies": {
+    "pdfjs-dist": "5.4.149"
+  }
+}
