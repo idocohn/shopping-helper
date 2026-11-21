@@ -37,9 +37,18 @@ def build_pages(data: Path, outdir: Path, owner: str, repo: str) -> None:
     for name in ("products.json", "categories.json"):
         shutil.copyfile(data / name, outdir / name)
     (outdir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    template = Path(__file__).resolve().parent / "mcp_server" / "site_index.html"
+    templates = Path(__file__).resolve().parent / "mcp_server"
+    template = templates / "site_index.html"
     html = template.read_text(encoding="utf-8").replace("__OWNER__", owner).replace("__REPO__", repo)
     (outdir / "index.html").write_text(html, encoding="utf-8")
+    shutil.copytree(templates / "basket", outdir / "basket", dirs_exist_ok=True)
+    pdfjs = templates / "node_modules" / "pdfjs-dist"
+    if pdfjs.exists():
+        vendor = outdir / "basket" / "vendor"
+        vendor.mkdir(exist_ok=True)
+        for module in ("pdf", "pdf.worker"):
+            shutil.copyfile(pdfjs / "legacy" / "build" / f"{module}.min.mjs", vendor / f"{module}.mjs")
+        shutil.copyfile(pdfjs / "LICENSE", vendor / "LICENSE")
 
 
 if __name__ == "__main__":
@@ -49,4 +58,6 @@ if __name__ == "__main__":
     parser.add_argument("--data", type=Path, default=Path("data"))
     parser.add_argument("--outdir", type=Path, default=Path("_site"))
     args = parser.parse_args()
+    if not (Path(__file__).resolve().parent / "mcp_server" / "node_modules" / "pdfjs-dist").exists():
+        parser.error("Run npm ci --prefix mcp_server --omit=optional before building the Pages site.")
     build_pages(args.data, args.outdir, args.owner, args.repo)

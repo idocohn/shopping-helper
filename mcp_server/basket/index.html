@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.openai.com; img-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Compare a basket · Shopping Helper</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <main>
+    <nav><a href="../">Hahishook catalog</a></nav>
+    <h1>Compare a basket</h1>
+    <p>Compare Hahishook and Shufersal using a grocery order or receipt.</p>
+    <section>
+      <h2>1. Import your order</h2>
+      <label for="receipt">Receipt or order file</label>
+      <input id="receipt" type="file" accept=".pdf,application/pdf,image/jpeg,image/png,image/webp">
+      <p class="hint">Choose a PDF or a JPG, PNG or WebP photo. Shufersal text PDFs import directly. For other files, review the preview before using AI, or paste the product lines.</p>
+      <div id="extract" hidden>
+        <div id="text-review">
+          <label for="receipt-text">Product lines to send to OpenAI</label>
+          <textarea id="receipt-text" rows="6" dir="auto"></textarea>
+          <p class="hint">Keep only product lines. Remove addresses, contact details and payment information before sending.</p>
+        </div>
+        <div id="photo-review" hidden>
+          <img id="receipt-preview" alt="Preview of the selected receipt photo">
+          <p class="hint">AI extraction sends the entire photo to OpenAI. Crop out personal and payment details before selecting the file.</p>
+        </div>
+        <button id="extract-ai" type="button" class="secondary">Extract items with AI</button>
+      </div>
+      <label for="basket">Basket items</label>
+      <textarea id="basket" rows="7" dir="auto" placeholder="מיונז אמיתי הלמנס | 2 | 394 גרם"></textarea>
+      <p class="hint">One item per line, in the format <code>product | quantity | pack size</code>. Review the imported items before comparing.</p>
+    </section>
+    <section>
+      <h2>2. Compare stores</h2>
+      <label for="api-key">Your OpenAI API key</label>
+      <input id="api-key" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="sk-…" aria-describedby="key-note">
+      <p class="hint" id="key-note">The browser sends the key directly to OpenAI for each AI action and clears this field. This site never saves it. OpenAI usage is billed to your account.</p>
+      <div class="actions">
+        <button id="compare-ai" type="button">Compare with AI</button>
+        <button id="compare-local" type="button" class="secondary">Compare without AI</button>
+      </div>
+    </section>
+    <p id="status" role="status" aria-live="polite"></p>
+    <section id="results" hidden aria-labelledby="result-title">
+      <h2 id="result-title">Store comparison</h2>
+      <p id="recommendation"></p>
+      <p class="hint">Totals use catalog prices and whole packs. Delivery, membership charges and promotions are excluded. Review the matched products and pack sizes before ordering.</p>
+      <div id="stores"></div>
+      <h3>Review items</h3>
+      <div id="matches"></div>
+    </section>
+  </main>
+</body>
+</html>

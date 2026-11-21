@@ -14,8 +14,16 @@ and exposes the data to AI assistants via an MCP server.
 
 Open the [public Hahishook catalog](https://idocohn.github.io/shopping-helper/)
 on your phone or computer to browse and search without installing anything.
-The page shows the snapshot date. Basket uploads use the local React app
-and FastAPI backend described below.
+Open **Compare a basket** to import a Shufersal text PDF, submit a receipt
+photo or other text receipt to AI, or enter items by hand. The screen compares covered items
+and estimated prices from the Hahishook and Shufersal store 003 snapshots.
+For AI actions, enter an OpenAI API key. The browser uses it for that action,
+sends it directly to OpenAI, and clears the field. For scanned PDFs, upload a
+photo of the receipt or paste the item lines.
+
+To preview the public site locally, run `npm ci --prefix mcp_server --omit=optional`,
+`python build_pages.py --owner idocohn --repo shopping-helper`, and
+`python -m http.server 8080 --directory _site`.
 
 ## What's in the box
 
