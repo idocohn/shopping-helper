@@ -3,6 +3,7 @@ import argparse
 import json
 import re
 from pathlib import Path
+from typing import BinaryIO
 import pandas as pd
 from rapidfuzz import fuzz, process
 
@@ -22,12 +23,20 @@ def load_catalog(path: str | Path) -> pd.DataFrame:
     df["match_key"] = df["name"].fillna("").map(normalize_name)
     return df
 
-def read_basket(path: str | Path) -> pd.DataFrame:
-    p = Path(path)
-    if p.suffix.lower() in {".xlsx", ".xls"}:
-        df = pd.read_excel(p)
+def read_basket(
+    file: str | Path | BinaryIO, *, filename: str | None = None, nrows: int | None = None
+) -> pd.DataFrame:
+    if filename is None:
+        if not isinstance(file, (str, Path)):
+            raise ValueError("A filename is required when reading an uploaded basket.")
+        filename = str(file)
+    suffix = Path(filename).suffix.lower()
+    if suffix in {".xlsx", ".xls"}:
+        df = pd.read_excel(file, nrows=nrows)
     else:
-        df = pd.read_csv(p)
+        df = pd.read_csv(file, nrows=nrows)
+    if df.empty:
+        raise ValueError("The basket needs a header and at least one product row.")
     # Accept English/Hebrew-ish columns.
     candidates = ["name", "product", "item", "שם", "מוצר", "שם מוצר"]
     col = next((c for c in candidates if c in df.columns), df.columns[0])
@@ -38,14 +47,14 @@ def match_basket(basket: pd.DataFrame, catalog: pd.DataFrame, min_score: int = 7
     choices = catalog["match_key"].tolist()
     rows = []
     for _, item in basket.iterrows():
-        q = normalize_name(item["input_name"])
+        q = "" if pd.isna(item["input_name"]) else normalize_name(item["input_name"])
         best = process.extractOne(q, choices, scorer=fuzz.WRatio) if q else None
         if not best or best[1] < min_score:
             rows.append({**item.to_dict(), "matched_name": None, "score": 0, "hahishook_price_nis": None, "product_url": None})
             continue
         _, score, idx = best
         prod = catalog.iloc[idx]
-        rows.append({**item.to_dict(), "matched_name": prod["name"], "score": score, "hahishook_price_nis": prod.get("price_nis"), "size_text": prod.get("size_text"), "unit_price_text": prod.get("unit_price_text"), "product_url": prod.get("product_url")})
+        rows.append({**item.to_dict(), "matched_name": prod["name"], "matched_source": prod.get("source", "hahishook"), "score": score, "hahishook_price_nis": prod.get("price_nis"), "size_text": prod.get("size_text"), "unit_price_text": prod.get("unit_price_text"), "product_url": prod.get("product_url")})
     return pd.DataFrame(rows)
 
 def main() -> None:

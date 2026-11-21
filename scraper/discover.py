@@ -2,11 +2,10 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from urllib.parse import urlparse
 import httpx
 from bs4 import BeautifulSoup
 from rich.console import Console
-from .utils import BASE_URL, HEADERS, normalize_url, looks_like_category
+from .utils import BASE_URL, HEADERS, category_url, normalize_url
 
 console = Console()
 
@@ -35,17 +34,12 @@ async def discover_categories(start_url: str = BASE_URL, limit: int = 500) -> li
             soup = BeautifulSoup(html, "lxml")
             for a in soup.select("a[href]"):
                 href = normalize_url(a.get("href", ""))
-                if not href.startswith(BASE_URL):
-                    continue
-                parsed = urlparse(href)
-                clean = parsed._replace(query="", fragment="").geturl().rstrip("/")
-                if looks_like_category(clean):
-                    if clean not in categories:
-                        categories.add(clean)
+                category = category_url(href)
+                if category:
+                    if category not in categories:
+                        categories.add(category)
                         # Follow category pages so nested categories are discovered too.
-                        queue.append(clean)
-                elif parsed.netloc.endswith("hahishook.com") and parsed.path in {"/", ""}:
-                    queue.append(clean)
+                        queue.append(category)
     console.print(f"Discovered {len(categories)} categories across {len(seen_pages)} pages")
     return sorted(categories)
 
