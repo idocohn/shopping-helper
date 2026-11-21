@@ -15,6 +15,8 @@ concurrency:
 
 jobs:
   scrape:
+    if: github.ref_name == github.event.repository.default_branch
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,50 +25,13 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Build merged catalog (all sources)
-        run: python build_catalog.py --outdir data
-      - name: Revert data if Hahishook scrape failed
-        # GH Actions runners get 403'd by Hahishook's WAF, so on bad days the
-        # only source that succeeds is Shufersal. Don't overwrite the catalog
-        # with a partial result - revert and let the previous data stand.
-        run: |
-          set -e
-          python - <<'PY'
-          import json, sys, subprocess, collections
-          rows = json.load(open('data/products.json', encoding='utf-8'))
-          counts = collections.Counter(r.get('source') for r in rows)
-          print(f'Source counts this run: {dict(counts)}')
-          if counts.get('hahishook', 0) == 0:
-              print('Hahishook returned 0 items - reverting data/ to preserve previous catalog.')
-              subprocess.run(['git', 'checkout', '--', 'data/'], check=True)
-              sys.exit(0)
-          PY
-      - name: Build static site for GitHub Pages
+      - name: Refresh catalog and retain data from unavailable sources
+        run: python build_catalog.py --outdir data --preserve-existing
+      - name: Build static site from the catalog
         env:
           REPO_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
-        run: |
-          set -e
-          mkdir -p _site
-          cp data/products.json data/categories.json _site/
-          python - <<'PY'
-          import json, os, datetime, pathlib, collections
-          rows = json.load(open('data/products.json', encoding='utf-8'))
-          sources = collections.Counter(r.get('source') or 'unknown' for r in rows)
-          manifest = {
-              "count": len(rows),
-              "updated_at": datetime.datetime.utcnow().isoformat() + "Z",
-              "owner": os.environ["REPO_OWNER"],
-              "repo": os.environ["REPO_NAME"],
-              "sources": dict(sources),
-          }
-          pathlib.Path('_site/manifest.json').write_text(
-              json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
-          PY
-          # Personalize the landing page with the actual GitHub repo.
-          sed -e "s|__OWNER__|${REPO_OWNER}|g" \
-              -e "s|__REPO__|${REPO_NAME}|g" \
-              mcp_server/site_index.html > _site/index.html
+        run: python build_pages.py --owner "$REPO_OWNER" --repo "$REPO_NAME"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

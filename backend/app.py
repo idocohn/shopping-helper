@@ -1,13 +1,21 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from xml.etree.ElementTree import ParseError
+from zipfile import BadZipFile
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
+from openpyxl.utils.exceptions import InvalidFileException
+from xlrd import XLRDError
+
 from matching.match_basket import load_catalog, read_basket, match_basket
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
 CATALOG = DATA / "products.json"
+MAX_BASKET_BYTES = 5 * 1024 * 1024
+MAX_BASKET_ROWS = 1000
 
 app = FastAPI(title="Hahishook Switcher")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -95,13 +103,21 @@ def products(
 
 
 @app.post("/api/match")
-async def match(file: UploadFile = File(...), min_score: int = 70):
+def match(file: UploadFile = File(...), min_score: int = Query(70, ge=0, le=100)):
     if not CATALOG.exists():
         raise HTTPException(status_code=503, detail="Catalog not built yet. Run the scraper first.")
-    tmp = DATA / f"uploaded_{file.filename}"
-    tmp.write_bytes(await file.read())
+    filename = file.filename or ""
+    if Path(filename).suffix.lower() not in {".csv", ".xlsx", ".xls"}:
+        raise HTTPException(status_code=400, detail="Upload a CSV, XLSX, or XLS file.")
+    if file.size is not None and file.size > MAX_BASKET_BYTES:
+        raise HTTPException(status_code=413, detail="The basket file must be 5 MB or smaller.")
+    try:
+        basket = read_basket(file.file, filename=filename, nrows=MAX_BASKET_ROWS + 1)
+    except (ValueError, BadZipFile, InvalidFileException, XLRDError, ParseError, OSError, KeyError) as error:
+        raise HTTPException(status_code=400, detail="Could not read the basket. Include a header and at least one product row.") from error
+    if len(basket) > MAX_BASKET_ROWS:
+        raise HTTPException(status_code=413, detail=f"The basket can contain up to {MAX_BASKET_ROWS:,} rows.")
     catalog = load_catalog(CATALOG)
-    basket = read_basket(tmp)
     result = match_basket(basket, catalog, min_score)
     return result.fillna("").to_dict(orient="records")
 

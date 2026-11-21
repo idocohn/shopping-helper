@@ -7,6 +7,8 @@ on:
     branches: [main]
     paths:
       - 'data/**'
+      - 'build_pages.py'
+      - '.github/workflows/deploy-pages.yml'
       - 'mcp_server/site_index.html'
   workflow_dispatch:
 
@@ -24,31 +26,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build static site from committed data
+      - name: Build static site from the catalog
         env:
           REPO_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
-        run: |
-          set -e
-          mkdir -p _site
-          cp data/products.json data/categories.json _site/
-          python - <<'PY'
-          import json, os, datetime, pathlib, collections
-          rows = json.load(open('data/products.json', encoding='utf-8'))
-          sources = collections.Counter(r.get('source') or 'unknown' for r in rows)
-          manifest = {
-              "count": len(rows),
-              "updated_at": datetime.datetime.utcnow().isoformat() + "Z",
-              "owner": os.environ["REPO_OWNER"],
-              "repo": os.environ["REPO_NAME"],
-              "sources": dict(sources),
-          }
-          pathlib.Path('_site/manifest.json').write_text(
-              json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
-          PY
-          sed -e "s|__OWNER__|${REPO_OWNER}|g" \
-              -e "s|__REPO__|${REPO_NAME}|g" \
-              mcp_server/site_index.html > _site/index.html
+        run: python build_pages.py --owner "$REPO_OWNER" --repo "$REPO_NAME"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

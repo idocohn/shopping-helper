@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hahishook Catalog &mdash; Search</title>
-<meta name="description" content="Searchable static mirror of the hahishook.com product catalog. Updated nightly.">
+<meta name="description" content="Search a snapshot of the hahishook.com product catalog.">
 <style>
   :root {
     --bg: #fafafa;
@@ -26,7 +26,7 @@
   main { max-width: 1280px; margin: 0 auto; padding: 1rem 1.25rem 3rem; }
   .controls { display: grid; grid-template-columns: 1fr; gap: 0.6rem; margin-bottom: 1rem; }
   @media (min-width: 720px) {
-    .controls { grid-template-columns: 2fr 1fr 1fr 1fr auto; align-items: end; }
+    .controls { grid-template-columns: 2fr 1fr 1fr auto; align-items: end; }
   }
   .field { display: flex; flex-direction: column; gap: 0.2rem; }
   .field label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -35,6 +35,7 @@
   .checkbox { display: flex; align-items: center; gap: 0.4rem; padding-bottom: 0.55rem; }
   .summary { display: flex; justify-content: space-between; align-items: center; margin: 0.5rem 0 1rem; font-size: 0.9rem; color: var(--muted); flex-wrap: wrap; gap: 0.5rem; }
   .summary .right { color: var(--muted); font-size: 0.8rem; }
+  .summary .stale { color: var(--badge-fg); }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.85rem; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; transition: box-shadow 0.15s; }
   .card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
@@ -69,7 +70,6 @@
   <h1>Hahishook Catalog</h1>
   <div class="sub">
     Unofficial static mirror of <a href="https://hahishook.com" target="_blank" rel="noopener">hahishook.com</a> &middot;
-    updated nightly &middot;
     <a href="https://github.com/__OWNER__/__REPO__" target="_blank" rel="noopener">source</a>
   </div>
 </header>
@@ -78,7 +78,7 @@
   <div class="controls">
     <div class="field">
       <label for="q">Search (Hebrew works)</label>
-      <input id="q" type="search" placeholder="e.g. &#1496;&#1495;&#1497;&#1504;&#1492; / tahini / cashew" autofocus>
+      <input id="q" type="search" placeholder="e.g. &#1496;&#1495;&#1497;&#1504;&#1492; / tahini / cashew">
     </div>
     <div class="field">
       <label for="category">Category</label>
@@ -97,7 +97,7 @@
   </div>
 
   <div class="summary">
-    <span id="count">Loading&hellip;</span>
+    <span id="count" role="status">Loading&hellip;</span>
     <span class="right" id="updated"></span>
   </div>
 
@@ -129,6 +129,7 @@
 
 <script>
 const PAGE_SIZE = 60;
+const STALE_AFTER_MS = 2 * 24 * 60 * 60 * 1000;
 // Hard filter: only show this source. Other sources stay in the data file
 // for AI / API clients but are hidden from the human UI for now.
 const ONLY_SOURCE = "hahishook";
@@ -160,15 +161,25 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+function webUrl(value) {
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
 function applyFilters() {
   const ql = state.q.trim().toLowerCase();
-  const cl = state.category.toLowerCase();
+  const category = state.category;
   let out = state.products.filter((p) => {
     if (ql) {
       const hay = [p.name, p.category, p.size_text, p.brand].filter(Boolean).join(" ").toLowerCase();
       if (!hay.includes(ql)) return false;
     }
-    if (cl && !(p.category || "").toLowerCase().includes(cl)) return false;
+    if (category && (p.category || "").trim() !== category) return false;
     if (state.inStock && !p.in_stock) return false;
     return true;
   });
@@ -193,8 +204,10 @@ function render() {
   const start = (state.page - 1) * PAGE_SIZE;
   const slice = state.filtered.slice(start, start + PAGE_SIZE);
   grid.innerHTML = slice.map((p) => {
-    const img = p.image_url
-      ? `<img src="${escapeHtml(p.image_url)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<span class=&quot;no-image&quot;>no image</span>'">`
+    const imageUrl = webUrl(p.image_url);
+    const productUrl = webUrl(p.product_url);
+    const img = imageUrl
+      ? `<img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<span class=&quot;no-image&quot;>no image</span>'">`
       : `<span class="no-image">no image</span>`;
     const price = p.price_nis != null ? `\u20aa${p.price_nis.toFixed(2)}` : `<span style="color:var(--muted)">no price</span>`;
     const stockBadge = p.in_stock === false ? '<span class="out-of-stock">out of stock</span>' : '';
@@ -205,7 +218,7 @@ function render() {
         <div class="size" dir="rtl">${escapeHtml(p.size_text || "")}</div>
         <div class="price-row"><span class="price">${price}</span> <span class="unit">${escapeHtml(p.unit_price_text || "")}</span></div>
         <div class="meta">${escapeHtml(p.category || "")} ${stockBadge}</div>
-        ${p.product_url ? `<a class="open" href="${escapeHtml(p.product_url)}" target="_blank" rel="noopener">Open product &rarr;</a>` : ""}
+        ${productUrl ? `<a class="open" href="${escapeHtml(productUrl)}" target="_blank" rel="noopener">Open product &rarr;</a>` : ""}
       </article>`;
   }).join("");
   renderPagination(total);
@@ -244,15 +257,12 @@ $("in-stock").addEventListener("change", (e) => { state.inStock = e.target.check
 
 async function init() {
   try {
-    const [productsRes, manifestRes] = await Promise.all([
-      fetch("products.json", { cache: "no-cache" }),
-      fetch("manifest.json", { cache: "no-cache" }).catch(() => null),
-    ]);
+    const productsRes = await fetch("products.json", { cache: "no-cache" });
     if (!productsRes.ok) throw new Error(`Failed to load products.json (${productsRes.status})`);
     // Hide all sources except ONLY_SOURCE from the UI. Other sources remain
     // available via the raw products.json for AI / API consumers.
     state.products = (await productsRes.json()).filter(
-      (p) => (p.source || "").toLowerCase() === ONLY_SOURCE.toLowerCase()
+      (p) => (p.source || "hahishook").toLowerCase() === ONLY_SOURCE
     );
     const counts = new Map();
     for (const p of state.products) {
@@ -266,18 +276,15 @@ async function init() {
       opt.textContent = `${cat} (${n})`;
       catSelect.appendChild(opt);
     }
-    if (manifestRes && manifestRes.ok) {
-      const m = await manifestRes.json();
-      if (m.updated_at) {
-        const d = new Date(m.updated_at);
-        if (!Number.isNaN(d.getTime())) {
-          updatedEl.textContent = `Updated ${d.toLocaleString()}`;
-        }
-      }
-    }
+    const scrapeTime = state.products.reduce((latest, p) => Math.max(latest, Date.parse(p.scraped_at) || 0), 0);
+    const stale = !scrapeTime || Date.now() - scrapeTime > STALE_AFTER_MS;
+    const dateLabel = scrapeTime ? `Snapshot from ${new Date(scrapeTime).toLocaleDateString()}.` : "Snapshot date unavailable.";
+    updatedEl.textContent = stale ? `${dateLabel} Check current prices on Hahishook.` : dateLabel;
+    updatedEl.classList.toggle("stale", stale);
     applyFilters();
   } catch (err) {
-    grid.innerHTML = `<div class="empty">Failed to load catalog: ${escapeHtml(err.message)}.<br><br>If this is the first deploy, wait for the <code>Update catalog</code> workflow to finish.</div>`;
+    grid.innerHTML = '<div class="empty">The catalog couldn’t load. Refresh the page to try again.</div>';
+    console.error(err);
     countEl.textContent = "Error";
   }
 }

@@ -12,6 +12,11 @@ Outputs a unified `data/products.json|csv|sqlite` catalog, serves it via a
 FastAPI search backend, ships a tiny static interactive site to GitHub Pages,
 and exposes the data to AI assistants via an MCP server.
 
+Open the [public Hahishook catalog](https://idocohn.github.io/shopping-helper/)
+on your phone or computer to browse and search without installing anything.
+The page shows the snapshot date. Basket uploads use the local React app
+and FastAPI backend described below.
+
 ## What's in the box
 
 ```text
@@ -37,7 +42,7 @@ data/           Built catalog lands here (committed back by the nightly Action)
 ## Requirements
 
 - Python 3.11+ (Windows or Unix)
-- Node 20+ for the web UI (optional)
+- Node 22.12+ for the web UI (optional)
 - Docker (optional, for `docker compose up`)
 
 ## Quick start
@@ -82,18 +87,17 @@ python build_catalog.py --only shufersal            # one source only
 python build_catalog.py --only hahishook shufersal  # explicit list
 ```
 
-If one source fails (network blip, schema change), the others still run and
-the partial catalog is still written; the workflow only fails if **every**
-source failed.
+By default, the command writes the sources that return products. Pass
+`--preserve-existing` to retain the previous data for any failed or unselected
+source. If every selected source fails, the existing catalog stays on disk.
 
 ### Adding a new source
 
 1. Create `sources/<name>.py` with a `scrape(...) -> list[Product]` function
    that sets `source="<name>"` on every record it returns.
 2. Add an entry to the `SOURCES` list in [build_catalog.py](build_catalog.py).
-3. Done &mdash; the workflow, the API, the UI source filter, and the MCP
-   tools all pick it up automatically because they read `source` from the
-   data.
+3. The workflow, API, and MCP tools use `source` from the data. The public
+   GitHub Pages browser displays Hahishook products.
 
 #### Chains worth adding (Israeli price-transparency portals)
 
@@ -135,7 +139,7 @@ Endpoints:
 | GET | `/api/sources` | `[{source, count}, ...]` |
 | GET | `/api/categories` | `[{category, count}, ...]` |
 | GET | `/api/products` | `{total, items}` with filters `q`, `category`, `source`, `in_stock`, `min_price`, `max_price`, `limit`, `offset` |
-| POST | `/api/match` | multipart `file` (CSV/XLSX basket), returns fuzzy matches against the catalog |
+| POST | `/api/match` | multipart `file` (CSV/XLSX/XLS basket, up to 5 MB and 1,000 rows), returns fuzzy matches against the catalog |
 
 Example:
 
@@ -166,7 +170,7 @@ immediately updates what the API serves.
 
 ## Basket matching CLI
 
-The matcher accepts a CSV or XLSX. The first column is treated as the
+The matcher accepts CSV, XLSX, or XLS. The first column is treated as the
 product name, or you can use any of these column names:
 
 `name`, `product`, `item`, `שם`, `מוצר`, `שם מוצר`
@@ -183,11 +187,18 @@ python -m matching.match_basket my_basket.csv \
 [.github/workflows/update-catalog.yml](.github/workflows/update-catalog.yml)
 runs once a day (cron `0 3 * * *`, also `workflow_dispatch`). It:
 
-1. Installs deps and runs `python -m scraper.scrape --discover`.
-2. Commits the regenerated `data/*.json|csv|sqlite` back to `main`.
-3. Builds a tiny `_site/` containing `products.json`, `categories.json`,
-   a `manifest.json` with `{count, updated_at}`, and a personalized
-   `index.html` landing page, then deploys it to GitHub Pages.
+1. Runs `python build_catalog.py --preserve-existing` and keeps the previous
+   snapshot for any source that fails. The run fails if no source returns products.
+2. Builds the Pages site, commits the catalog files to `main`, and deploys
+   the site. `manifest.json` reports product counts and actual scrape times.
+
+GitHub pauses scheduled workflows in inactive public repositories. Re-enable
+**Update catalog** from the Actions tab if its schedule is disabled. The
+publish-only workflow also deploys committed catalog or site changes on `main`.
+
+If GitHub Actions cannot reach a store, refresh that store from a machine
+with access and commit the regenerated catalog files. For Hahishook, run
+`python build_catalog.py --only hahishook --preserve-existing`.
 
 After the first successful run, the catalog is publicly available at
 
@@ -200,7 +211,8 @@ https://<your-gh-user>.github.io/<your-repo>/manifest.json
 One-time setup in the GitHub repo:
 
 1. Settings &rarr; Pages &rarr; Source: **GitHub Actions**.
-2. Run the `Update catalog` workflow once manually from the Actions tab.
+2. Run **Publish catalog to Pages** from the Actions tab to publish the
+   committed snapshot. Run **Update catalog** to fetch fresh prices.
 
 ## MCP server for AI assistants
 

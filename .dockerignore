@@ -1,0 +1,10 @@
+.git
+.venv
+venv
+.env
+**/__pycache__
+**/node_modules
+webapp/dist
+_site
+data/uploaded_*
+data/basket_matches.csv

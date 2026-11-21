@@ -1,6 +1,6 @@
 from __future__ import annotations
 import re
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, unquote, urljoin, urlparse
 
 BASE_URL = "https://hahishook.com"
 CATEGORY_PREFIX = "/product-category/"
@@ -41,6 +41,10 @@ def price_to_float(text: str | None) -> float | None:
     m = re.search(r"(\d+(?:\.\d+)?)", cleaned)
     return float(m.group(1)) if m else None
 
-def looks_like_category(url: str) -> bool:
+def category_url(url: str) -> str | None:
     parsed = urlparse(url)
-    return parsed.netloc.endswith("hahishook.com") and parsed.path.startswith(CATEGORY_PREFIX)
+    path = unquote(parsed.path).rstrip("/")
+    if not is_hahishook_url(url) or not path.startswith(CATEGORY_PREFIX):
+        return None
+    path = re.sub(r"/page/\d+$", "", path)
+    return BASE_URL + quote(path, safe="/") + "/"
