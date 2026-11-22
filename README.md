@@ -21,6 +21,9 @@ The results table shows product photos where available, match status, and
 savings against the receipt's paid line price or a verified Shufersal price.
 It opens on rows with positive savings and automatically selects good matches
 that cost less. Similar products show their differences for review.
+Use **Add to basket** on the Hahishook products you want, then review or edit
+pack quantities before continuing to Hahishook. The checkout link sends only
+product IDs and quantities. Hahishook confirms final prices and places the order.
 For AI actions, enter an OpenAI API key. The browser uses it for that action,
 sends it directly to OpenAI, and clears the field. For scanned PDFs, upload a
 photo of the receipt or paste the item lines.

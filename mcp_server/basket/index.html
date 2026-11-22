@@ -5,18 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.openai.com; img-src 'self' blob: https://hahishook.com https://www.hahishook.com; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Compare a basket · Shopping Helper</title>
-  <link rel="stylesheet" href="./style.css?v=5">
-  <script type="module" src="./start.mjs?v=2"></script>
+  <link rel="stylesheet" href="./style.css?v=6">
+  <script type="module" src="./start.mjs?v=3"></script>
 </head>
 <body>
   <main>
-    <nav><a href="../">Hahishook catalog</a></nav>
-    <h1>Compare a basket</h1>
-    <p>Compare Hahishook and Shufersal using a grocery order or receipt.</p>
+    <nav><span class="brand">Shopping Helper</span><a href="../">Browse catalog</a></nav>
+    <header class="page-intro">
+      <h1>Build your Hahishook basket</h1>
+      <p>Compare a receipt with the catalog, choose what you want, then review your order at Hahishook.</p>
+    </header>
     <p id="app-loading" role="status">Loading comparison tools… If this stays on screen, refresh the page.</p>
     <noscript><p class="error">Enable JavaScript to import and compare a basket.</p></noscript>
-    <section>
-      <h2>1. Import your order</h2>
+    <div class="setup-grid">
+    <section class="setup-panel">
+      <h2>Import your order</h2>
       <label for="receipt">Receipt or order file</label>
       <input id="receipt" type="file" accept=".pdf,application/pdf,image/jpeg,image/png,image/webp" disabled>
       <p class="hint">Choose a PDF or a JPG, PNG or WebP photo. Shufersal text PDFs import directly. For other files, review the preview before using AI, or paste the product lines.</p>
@@ -36,8 +39,8 @@
       <textarea id="basket" rows="7" dir="auto" placeholder="מיונז אמיתי הלמנס | 2 | 394 גרם"></textarea>
       <p class="hint">One item per line, in the format <code>product | quantity | pack size | paid line total</code>. The paid total is optional. Review imported quantities and prices.</p>
     </section>
-    <section>
-      <h2>2. Compare stores</h2>
+    <section class="setup-panel">
+      <h2>Compare stores</h2>
       <label for="api-key">Your OpenAI API key</label>
       <input id="api-key" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="sk-…" aria-describedby="key-note key-error">
       <p id="key-error" class="error" role="alert" hidden></p>
@@ -47,14 +50,20 @@
         <button id="compare-local" type="button" class="secondary" disabled>Compare without AI</button>
       </div>
     </section>
+    </div>
     <p id="status" role="status" aria-live="polite"></p>
     <p id="operation-error" class="error" role="alert" tabindex="-1" hidden></p>
     <section id="results" hidden aria-labelledby="result-title">
-      <h2 id="result-title">Store comparison</h2>
+      <div class="review-heading">
+        <div>
+          <h2 id="result-title">Review your matches</h2>
+          <p class="hint">Choose the Hahishook products you want to take to checkout.</p>
+        </div>
+        <a class="action-link secondary" href="#checkout-panel" id="review-basket">Review basket <span id="basket-badge">0</span></a>
+      </div>
       <p id="recommendation"></p>
-      <p class="hint">Totals use catalog prices and whole packs. Delivery, membership charges and promotions are excluded. Review the matched products and pack sizes before ordering.</p>
-      <h3>Review items</h3>
-      <p id="match-help" class="hint">Savings use the paid receipt price or a verified Shufersal match as the reference. Good matches with savings are selected automatically. Select a similar product to include it in totals.</p>
+      <p id="match-help" class="hint">Savings use the receipt price or a verified Shufersal price. Good matches with savings are preselected for comparison. Use <strong>Add to basket</strong> to choose what goes to Hahishook.</p>
+      <p class="hint swipe-hint">Swipe the table to see prices and basket actions.</p>
       <p id="match-count" role="status" class="hint"></p>
       <div class="match-table-scroll" role="region" aria-label="Basket matches" tabindex="0">
         <table class="match-table" aria-describedby="match-help">
@@ -81,6 +90,23 @@
         </table>
       </div>
     </section>
+    <section id="checkout-panel" hidden aria-labelledby="checkout-title">
+      <div class="checkout-content">
+        <div>
+          <h2 id="checkout-title" tabindex="-1">Your Hahishook basket</h2>
+          <p id="checkout-empty">Add products from the comparison to start your basket.</p>
+          <ul id="checkout-items" class="checkout-items"></ul>
+        </div>
+        <div class="checkout-summary" id="checkout-summary" hidden>
+          <div class="checkout-totals"><span id="checkout-count"></span><strong id="checkout-subtotal"></strong></div>
+          <p class="hint">Estimated catalog subtotal. Hahishook confirms availability, prices, fees and delivery at checkout.</p>
+          <a class="action-link checkout-link" id="checkout-link" target="_blank" rel="noopener noreferrer">Continue to Hahishook checkout</a>
+          <p class="hint">Opens in a new tab.</p>
+        </div>
+      </div>
+      <p id="basket-feedback" role="status" class="hint"></p>
+    </section>
+    <a class="action-link basket-shortcut" href="#checkout-panel" id="basket-shortcut" hidden></a>
   </main>
 </body>
 </html>

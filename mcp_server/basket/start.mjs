@@ -1,6 +1,6 @@
 const loading = document.getElementById('app-loading');
 
-import('./app.mjs?v=7').then(() => {
+import('./app.mjs?v=8').then(() => {
   loading.hidden = true;
 }).catch(() => {
   loading.textContent = 'The comparison tools could not load. Refresh the page and try again.';

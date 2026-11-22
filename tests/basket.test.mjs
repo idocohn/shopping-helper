@@ -1,6 +1,22 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {pdfRows, parseOrder, parseBasket, pack, cost, saving, summarize, candidatesFor} from '../mcp_server/basket/comparison.mjs';
+import {canCheckout, checkoutUrl} from '../mcp_server/basket/checkout.mjs';
+
+test('hands only selected Hahishook product IDs and combined quantities to checkout', () => {
+  const mayo = {source: 'hahishook', product_id: '125771', in_stock: true};
+  const marshmallows = {source: 'hahishook', product_id: '425938', in_stock: true};
+  const url = new URL(checkoutUrl([
+    {product: mayo, quantity: 2}, {product: marshmallows, quantity: 1}, {product: mayo, quantity: 3},
+  ]));
+  assert.equal(url.origin, 'https://hahishook.com');
+  assert.equal(url.pathname, '/checkout-link/');
+  assert.deepEqual([...url.searchParams], [['products', '125771:5,425938:1']]);
+  assert.equal(checkoutUrl([]), null);
+  assert.equal(canCheckout({...mayo, source: 'shufersal'}), false);
+  assert.throws(() => checkoutUrl([{product: mayo, quantity: 1.5}]));
+  assert.throws(() => checkoutUrl([{product: {...mayo, product_id: '125771:5'}, quantity: 1}]));
+});
 
 test('reads Hebrew rows in visual order and carries a grocery item across pages', () => {
   const items = [

@@ -1,4 +1,5 @@
 import {pdfRows, parseOrder, parseBasket, candidatesFor, cost, saving, summarize} from './comparison.mjs?v=3';
+import {canCheckout, checkoutUrl} from './checkout.mjs';
 
 const $ = id => document.getElementById(id);
 const money = new Intl.NumberFormat('en-IL', {style: 'currency', currency: 'ILS'});
@@ -263,6 +264,9 @@ async function loadCatalog() {
 
 let catalog;
 let comparison;
+const checkoutItems = new Map();
+let checkoutButtons = [];
+let checkoutVisible = false;
 async function compare(useAI) {
   let lines;
   try {
@@ -435,6 +439,100 @@ function productPreview(product) {
   return preview;
 }
 
+function renderCheckout(message = '') {
+  const items = Array.from(checkoutItems.values());
+  const packs = items.reduce((sum, item) => sum + item.quantity, 0);
+  const subtotal = items.reduce((sum, item) => sum + item.quantity * Math.round(item.product.price_nis * 100), 0);
+  $('basket-badge').textContent = String(items.length);
+  $('checkout-count').textContent = items.length + (items.length === 1 ? ' line' : ' lines') + ' · ' + packs + (packs === 1 ? ' pack' : ' packs');
+  $('checkout-subtotal').textContent = formatPrice(subtotal);
+  $('basket-shortcut').textContent = 'Review basket · ' + formatPrice(subtotal);
+  $('basket-shortcut').hidden = !items.length || checkoutVisible;
+  $('checkout-empty').hidden = items.length > 0;
+  $('checkout-summary').hidden = !items.length;
+  const link = $('checkout-link');
+  try {
+    const url = checkoutUrl(items);
+    if (url) link.href = url;
+    else link.removeAttribute('href');
+    link.hidden = !url;
+    $('basket-feedback').textContent = message;
+  } catch (error) {
+    link.hidden = true;
+    link.removeAttribute('href');
+    $('basket-feedback').textContent = error.message;
+  }
+  for (const update of checkoutButtons) update();
+}
+
+function renderCheckoutItems() {
+  $('checkout-items').replaceChildren(...Array.from(checkoutItems, ([key, item]) => {
+    const row = element('li', '', 'checkout-item');
+    const product = element('div');
+    product.append(productPreview(item.product));
+    if (item.product.size_text) {
+      const size = element('div', item.product.size_text, 'hint checkout-size');
+      size.dir = 'auto';
+      product.append(size);
+    }
+    const quantities = element('div', '', 'checkout-quantity');
+    const label = element('label', 'Packs');
+    const input = element('input');
+    input.type = 'number';
+    input.min = '1';
+    input.step = '1';
+    input.required = true;
+    input.value = String(item.quantity);
+    input.setAttribute('aria-label', 'Packs of ' + item.product.name);
+    const price = element('strong', formatPrice(item.quantity * Math.round(item.product.price_nis * 100)));
+    const remove = element('button', 'Remove', 'remove-item');
+    remove.type = 'button';
+    remove.setAttribute('aria-label', 'Remove ' + item.product.name + ' from basket');
+    input.addEventListener('input', () => {
+      const quantity = input.valueAsNumber;
+      if (!Number.isSafeInteger(quantity) || quantity < 1) {
+        input.setAttribute('aria-invalid', 'true');
+        $('basket-feedback').textContent = 'Enter at least one whole pack for ' + item.product.name + '.';
+        return;
+      }
+      input.removeAttribute('aria-invalid');
+      item.quantity = quantity;
+      price.textContent = formatPrice(quantity * Math.round(item.product.price_nis * 100));
+      renderCheckout('Updated quantity for ' + item.product.name + '.');
+    });
+    remove.addEventListener('click', () => {
+      checkoutItems.delete(key);
+      renderCheckoutItems();
+      renderCheckout('Removed ' + item.product.name + ' from the Hahishook basket.');
+      $('checkout-title').focus();
+    });
+    label.append(input);
+    quantities.append(label, price, remove);
+    row.append(product, quantities);
+    return row;
+  }));
+}
+
+function openBasket(event) {
+  event.preventDefault();
+  $('checkout-title').focus({preventScroll: true});
+  $('checkout-panel').scrollIntoView({block: 'start'});
+}
+
+$('review-basket').addEventListener('click', openBasket);
+$('basket-shortcut').addEventListener('click', openBasket);
+$('checkout-link').addEventListener('click', event => {
+  const invalid = $('checkout-items').querySelector('input[aria-invalid=true]');
+  if (!invalid) return;
+  event.preventDefault();
+  $('basket-feedback').textContent = 'Fix the highlighted quantity before continuing to Hahishook.';
+  invalid.focus();
+});
+new IntersectionObserver(([entry]) => {
+  checkoutVisible = entry.isIntersecting;
+  $('basket-shortcut').hidden = !checkoutItems.size || checkoutVisible;
+}).observe($('checkout-panel'));
+
 function matchRow(line, store, index, order, reference) {
   const row = element('tr');
   row.dataset.order = order;
@@ -466,6 +564,36 @@ function matchRow(line, store, index, order, reference) {
   const total = element('td', '', 'match-number');
   const savings = element('td', '', 'match-number');
   row.append(item, element('td', store.name), statusCell, productCell, packs, total, savings);
+  const add = element('button', 'Add to basket', 'add-product');
+  add.type = 'button';
+  const cartKey = JSON.stringify([line.name, line.quantity, line.size, index]);
+  const displayedProduct = () => store.selected[index] || store.suggested[index]?.product;
+  if (store.source === 'hahishook') {
+    productCell.append(add);
+    checkoutButtons.push(updateBasketButton);
+    add.addEventListener('click', () => {
+      const product = displayedProduct();
+      if (!canCheckout(product)) return;
+      let message;
+      if (checkoutItems.get(cartKey)?.product.product_id === product.product_id) {
+        checkoutItems.delete(cartKey);
+        message = 'Removed ' + product.name + ' from the Hahishook basket.';
+      } else {
+        checkoutItems.set(cartKey, {product, quantity: cost(line, product).packages});
+        message = 'Added ' + product.name + ' to the Hahishook basket.';
+      }
+      renderCheckoutItems();
+      renderCheckout(message);
+    });
+  }
+
+  function updateBasketButton() {
+    const product = displayedProduct();
+    const added = canCheckout(product) && checkoutItems.get(cartKey)?.product.product_id === product.product_id;
+    add.hidden = !canCheckout(product);
+    add.textContent = added ? 'Remove from basket' : 'Add to basket';
+    add.setAttribute('aria-label', (added ? 'Remove from basket: ' : 'Add to basket: ') + (product?.name || ''));
+  }
 
   function updateRow() {
     const product = store.selected[index];
@@ -491,6 +619,9 @@ function matchRow(line, store, index, order, reference) {
       preview.append(difference);
     }
     if (!product && suggestion) preview.append(element('div', 'Select to include in totals', 'hint'));
+    if (store.source === 'hahishook' && displayed && !canCheckout(displayed)) {
+      preview.append(element('div', 'Open the product to add it at Hahishook.', 'hint'));
+    }
     const price = displayed && cost(line, displayed);
     packs.textContent = price ? String(price.packages) : '—';
     total.textContent = price ? formatPrice(price.cents) : '—';
@@ -502,6 +633,7 @@ function matchRow(line, store, index, order, reference) {
     savingLabel.dataset.direction = difference > 0 ? 'positive' : difference < 0 ? 'negative' : 'neutral';
     savings.replaceChildren(savingLabel);
     if (difference != null) savings.append(element('div', reference.label, 'hint'));
+    updateBasketButton();
   }
 
   select.addEventListener('change', () => {
@@ -519,6 +651,7 @@ function matchRow(line, store, index, order, reference) {
 function render() {
   const {lines, stores, references} = comparison;
   renderSummary(lines, stores);
+  checkoutButtons = [];
   $('matches').replaceChildren(...lines.flatMap((line, index) => stores.map((store, order) =>
     matchRow(line, store, index, index * stores.length + order, references[index]))));
   $('match-filter').value = 'matched';
@@ -526,6 +659,8 @@ function render() {
   sortMatches();
   filterMatches();
   $('results').hidden = false;
+  $('checkout-panel').hidden = false;
+  renderCheckout();
 }
 
 controls.forEach(id => { $(id).disabled = false; });
