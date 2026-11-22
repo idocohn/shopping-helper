@@ -5,7 +5,7 @@ const $ = id => document.getElementById(id);
 const money = new Intl.NumberFormat('en-IL', {style: 'currency', currency: 'ILS'});
 const formatPrice = cents => money.format(cents / 100);
 const status = $('status');
-const controls = ['receipt', 'receipt-text', 'basket', 'compare-ai', 'compare-local', 'extract-ai'];
+const controls = ['receipt', 'receipt-text', 'basket', 'compare', 'extract-ai'];
 const maxItems = 100;
 const names = {hahishook: 'Hahishook', shufersal: 'Shufersal · store 003'};
 
@@ -116,7 +116,7 @@ async function askOpenAI(key, task, data, schema, photo) {
   }
   if (!response.ok) throw new BasketError('OpenAI could not process the request (HTTP ' + response.status + '). Try again.');
   const parts = Array.isArray(body?.output) ? body.output.flatMap(item => item?.content || []) : [];
-  if (parts.some(item => item?.type === 'refusal')) throw new BasketError('OpenAI declined this request. Review the item text or compare without AI.');
+  if (parts.some(item => item?.type === 'refusal')) throw new BasketError('OpenAI declined this request. Review the item text and try again.');
   if (body?.status === 'incomplete') throw new BasketError('OpenAI returned an incomplete result. Try a smaller basket.');
   const content = parts.find(item => item?.type === 'output_text');
   if (body?.status === 'completed' && content) {
@@ -366,8 +366,11 @@ async function suggestMatches(key, lines, stores, progress) {
   }
 }
 
-$('compare-ai').addEventListener('click', () => run('Checking catalog matches with OpenAI…', 'Could not compare the basket.', () => compare(true)));
-$('compare-local').addEventListener('click', () => run('Checking catalog matches…', 'Could not compare the basket.', () => compare(false)));
+$('compare').addEventListener('click', () => {
+  const useAI = Boolean($('api-key').value.trim());
+  const message = useAI ? 'Checking catalog matches with OpenAI…' : 'Checking catalog matches…';
+  run(message, 'Could not compare the basket.', () => compare(useAI));
+});
 $('basket').addEventListener('input', () => { $('results').hidden = true; });
 
 function renderSummary(lines, stores) {

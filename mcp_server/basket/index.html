@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.openai.com; img-src 'self' blob: https://hahishook.com https://www.hahishook.com; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Compare a basket · Shopping Helper</title>
   <link rel="stylesheet" href="./style.css?v=6">
-  <script type="module" src="./start.mjs?v=3"></script>
+  <script type="module" src="./start.mjs?v=4"></script>
 </head>
 <body>
   <main>
@@ -44,10 +44,9 @@
       <label for="api-key">Your OpenAI API key</label>
       <input id="api-key" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="sk-…" aria-describedby="key-note key-error">
       <p id="key-error" class="error" role="alert" hidden></p>
-      <p class="hint" id="key-note">The browser sends the key directly to OpenAI for each AI action and clears this field. This site never saves it. OpenAI usage is billed separately through <a href="https://platform.openai.com/settings/organization/billing/overview" target="_blank" rel="noopener">API billing</a>.</p>
+      <p class="hint" id="key-note">Leave this blank to compare using the catalog. A key enables AI matching. The browser sends it directly to OpenAI and clears the field after use. OpenAI usage is billed separately through <a href="https://platform.openai.com/settings/organization/billing/overview" target="_blank" rel="noopener">API billing</a>.</p>
       <div class="actions">
-        <button id="compare-ai" type="button" disabled>Compare with AI</button>
-        <button id="compare-local" type="button" class="secondary" disabled>Compare without AI</button>
+        <button id="compare" type="button" disabled>Compare</button>
       </div>
     </section>
     </div>
