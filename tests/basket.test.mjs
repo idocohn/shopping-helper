@@ -20,10 +20,35 @@ test('accounts for pack size, discrete packs, and different unit dimensions', ()
   assert.deepEqual(pack('3 יח׳, 400 גרם ליח׳'), {dimension: 'mass', amount: 1200});
   assert.deepEqual(pack('1.50 1ליטר', true), {dimension: 'volume', amount: 1500});
   assert.equal(pack('4 * 56 יחידות').amount, 224);
+  assert.equal(pack('25 גרם * 10 יחידות').amount, 250);
+  assert.deepEqual(pack('1.20 1קילוגרם', true), {dimension: 'mass', amount: 1200});
   assert.deepEqual(cost({size: '394 גרם', quantity: 2}, {size_text: '500 גרם', price_nis: 8.2}), {
     packages: 2, cents: 1640, comparable: true,
   });
   assert.equal(cost({size: '394 גרם', quantity: 2}, {size_text: '500 מ"ל', price_nis: 8.2}).comparable, false);
+});
+
+test('compares wipes by the pieces in each retail pack', () => {
+  const line = {size: '4 * 56 יחידות', quantity: 3};
+  assert.deepEqual(cost(line, {
+    source: 'shufersal', name: 'מגב.האגיס ללא בישום 4*56', size_text: '1.00 יחידות', price_nis: 23.9,
+  }), {packages: 3, cents: 7170, comparable: true});
+  assert.deepEqual(cost(line, {
+    name: 'מארז מגבונים ללא בישום בייביסיטר', size_text: '60*4 מגבונים, ללא בישום', price_nis: 11.9,
+  }), {packages: 3, cents: 3570, comparable: true});
+  assert.equal(cost(line, {source: 'shufersal', size_text: '1.00 יחידות', price_nis: 25}).comparable, false);
+});
+
+test('shortlists crushed tomatoes as a substitute candidate for tomato puree', () => {
+  const line = {name: 'מחית עגבניות קלה MUTTI', size: '700 גרם'};
+  const products = [
+    {name: 'מחית קארי ירוקה', size_text: '70 גרם', price_nis: 8.9, in_stock: true},
+    {name: 'עגבניות מרוסקות במיץ Polpa שלישיה', size_text: '3 יח׳, 400 גרם ליח׳', price_nis: 11.6, in_stock: true},
+  ];
+  const [candidate, unrelated] = candidatesFor(line, products);
+  assert.equal(candidate.product, products[1]);
+  assert.equal(candidate.exactName, false);
+  assert.equal(unrelated, undefined);
 });
 
 test('ranks an exact pack but preserves percentage variants and filters unavailable products', () => {

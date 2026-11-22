@@ -1,4 +1,4 @@
-import {pdfRows, parseOrder, parseBasket, candidatesFor, cost, summarize} from './comparison.mjs';
+import {pdfRows, parseOrder, parseBasket, candidatesFor, cost, summarize} from './comparison.mjs?v=2';
 
 const $ = id => document.getElementById(id);
 const money = new Intl.NumberFormat('en-IL', {style: 'currency', currency: 'ILS'});

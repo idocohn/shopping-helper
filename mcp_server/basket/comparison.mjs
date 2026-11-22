@@ -57,29 +57,48 @@ export function parseBasket(text) {
 }
 
 export function pack(text, fromFeed = false) {
-  const value = (text || '').toLowerCase().replace(/[״"׳']/g, '').replace(/מ\s*ל/g, 'מל');
-  const unit = '(מיליליטר|ליטר|מל|קג|גרם|יחידות|גלילים|g|kg|ml|l)';
+  const value = (text || '').toLowerCase().replace(/[\\״"׳']/g, '').replace(/מ\s*ל/g, 'מל');
+  const unit = '(מיליליטר|ליטר|מל|קילוגרם|קג|גרם|יחידות|גלילים|מגבונים|g|kg|ml|l)';
   const multiply = value.match(new RegExp('(\\d+(?:\\.\\d+)?)\\s*[*×x]\\s*(\\d+(?:\\.\\d+)?)\\s*' + unit, 'u'));
   const perUnit = value.match(new RegExp('(\\d+)\\s*יח(?:ידות)?[., ]+\\s*(\\d+(?:\\.\\d+)?)\\s*' + unit + '\\s+ליח', 'u'));
+  const packed = value.match(new RegExp('(\\d+(?:\\.\\d+)?)\\s*' + unit + '\\s*[*×x]\\s*(\\d+)\\s*יח(?:ידות)?', 'u'));
   const feed = fromFeed && value.match(new RegExp('^(\\d+(?:\\.\\d+)?)\\s+(?:100|1)\\s*' + unit, 'u'));
   const single = value.match(new RegExp('(\\d+(?:\\.\\d+)?)\\s*' + unit, 'u'));
-  const multi = multiply || perUnit;
+  const multi = multiply || perUnit || (packed && [packed[0], packed[1], packed[3], packed[2]]);
   const match = multi || feed || single;
   if (!match) return null;
   const amount = Number(match[1]) * (multi ? Number(match[2]) : 1);
   const label = match[multi ? 3 : 2];
   const units = {
-    גרם: ['mass', 1], g: ['mass', 1], קג: ['mass', 1000], kg: ['mass', 1000],
+    גרם: ['mass', 1], g: ['mass', 1], קג: ['mass', 1000], קילוגרם: ['mass', 1000], kg: ['mass', 1000],
     מל: ['volume', 1], מיליליטר: ['volume', 1], ml: ['volume', 1], ליטר: ['volume', 1000], l: ['volume', 1000],
-    יחידות: ['count', 1], גלילים: ['rolls', 1],
+    יחידות: ['count', 1], מגבונים: ['count', 1], גלילים: ['rolls', 1],
   };
   const [dimension, factor] = units[label];
   return amount > 0 ? {dimension, amount: amount * factor} : null;
 }
 
+function productPack(product, wanted) {
+  const fromFeed = product.source === 'shufersal';
+  const size = pack(product.size_text, fromFeed);
+  if (!fromFeed) return size;
+
+  const namedRolls = wanted?.dimension === 'rolls' && product.name?.match(/(\d+)\s*גלילים/u);
+  if (namedRolls) return {dimension: 'rolls', amount: Number(namedRolls[1])};
+  if (size?.dimension !== 'count' || size.amount !== 1) return size;
+
+  // PriceFull's quantity of one unit can mean one retail pack, not one piece.
+  const pieces = product.name?.match(/(\d+)\s*יח(?:ידות)?(?:$|\s)/u);
+  if (pieces) return {dimension: 'count', amount: Number(pieces[1])};
+  const wipes = product.name?.match(/מגב.*?(\d+)\s*[*×x]\s*(\d+)(?:$|\s)/u);
+  return wipes ? {dimension: 'count', amount: Number(wipes[1]) * Number(wipes[2])} : null;
+}
+
 function terms(text) {
-  return text.normalize('NFKC').toLowerCase().replace(/([א-ת])['׳"״]/g, '$1')
-    .split(/[^a-zא-ת]+/u).filter(word => word.length > 1 && !['גרם', 'ליטר', 'מיליליטר', 'יחידות', 'מארז'].includes(word));
+  const words = text.normalize('NFKC').toLowerCase().replace(/([א-ת])['׳"״]/g, '$1')
+    .split(/[^a-zא-ת]+/u).filter(word => word.length > 1 && !['גרם', 'ליטר', 'מיליליטר', 'יחידות', 'מארז', 'בטעם', 'טעם', 'אריזה'].includes(word));
+  if (/מחית עגבניות|עגבניות מרוסקות/u.test(text)) words.push('עגבניות מרוסקות');
+  return words;
 }
 
 function productName(text) {
@@ -94,9 +113,10 @@ export function candidatesFor(line, products, limit = 6) {
   return products.flatMap(product => {
     if (product.in_stock !== true || !Number.isFinite(product.price_nis) || product.price_nis <= 0) return [];
     const words = new Set(terms(product.name));
+    if (input.has('עגבניות מרוסקות') && !words.has('עגבניות')) return [];
     const common = [...input].filter(word => words.has(word)).length;
     if (!common) return [];
-    const size = pack(product.size_text, product.source === 'shufersal');
+    const size = productPack(product, expected);
     const compatible = expected && size && expected.dimension === size.dimension;
     const exactSize = compatible && Math.abs(expected.amount - size.amount) < 0.01;
     const score = 2 * common / (input.size + words.size);
@@ -107,7 +127,7 @@ export function candidatesFor(line, products, limit = 6) {
 
 export function cost(line, product) {
   const wanted = pack(line.size);
-  const available = pack(product.size_text, product.source === 'shufersal');
+  const available = productPack(product, wanted);
   const comparable = Boolean(wanted && available && wanted.dimension === available.dimension);
   const packages = comparable ? Math.ceil(line.quantity * wanted.amount / available.amount - 1e-8) : line.quantity;
   return {packages, cents: Math.round(product.price_nis * 100) * packages, comparable};
