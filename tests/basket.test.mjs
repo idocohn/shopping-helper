@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {pdfRows, parseOrder, parseBasket, pack, cost, summarize, candidatesFor} from '../mcp_server/basket/comparison.mjs';
+import {pdfRows, parseOrder, parseBasket, pack, cost, saving, summarize, candidatesFor} from '../mcp_server/basket/comparison.mjs';
 
 test('reads Hebrew rows in visual order and carries a grocery item across pages', () => {
   const items = [
@@ -37,6 +37,16 @@ test('compares wipes by the pieces in each retail pack', () => {
     name: 'מארז מגבונים ללא בישום בייביסיטר', size_text: '60*4 מגבונים, ללא בישום', price_nis: 11.9,
   }), {packages: 3, cents: 3570, comparable: true});
   assert.equal(cost(line, {source: 'shufersal', size_text: '1.00 יחידות', price_nis: 25}).comparable, false);
+});
+
+test('uses paid receipt totals after item discounts and calculates signed savings', () => {
+  const [item] = parseOrder(['מיונז אמיתי הלמנס | 394 גרם', "2 יח' יחידות", '₪3.53 ל100 גרם ₪ 27.80', 'הנחה', '-₪ 7.80']);
+  assert.equal(item.paidCents, 2000);
+  assert.equal(parseBasket('מיונז | 2 | 394 גרם | 20.00')[0].paidCents, 2000);
+  assert.equal(saving(item, {size_text: '500 גרם', price_nis: 8.2}, item.paidCents), 360);
+  assert.equal(saving(item, {size_text: '500 גרם', price_nis: 14.9}, item.paidCents), -980);
+  assert.equal(saving(item, {size_text: '500 מ"ל', price_nis: 8.2}, item.paidCents), null);
+  assert.equal(saving(item, {size_text: '500 גרם', price_nis: 8.2}), null);
 });
 
 test('shortlists crushed tomatoes as a substitute candidate for tomato puree', () => {

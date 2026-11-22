@@ -21,9 +21,29 @@ button:disabled { opacity: .64; cursor: wait; }
 #status { color: #394c64; }
 #recommendation { font-weight: 600; }
 #stores { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: .7rem; margin-bottom: 1rem; }
-.store, .item { border: 1px solid #dce1e7; border-radius: .5rem; padding: .75rem; }
+.store { border: 1px solid #dce1e7; border-radius: .5rem; padding: .75rem; }
 .store p:last-child { margin-bottom: 0; }
-.item { margin: .5rem 0; }
-.item h4 { margin: 0; overflow-wrap: anywhere; }
-.item label { font-size: .9rem; }
-.item .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: .5rem; }
+.match-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .75rem; margin-bottom: .5rem; }
+.match-toolbar label, .match-toolbar p { margin: 0; }
+.match-toolbar select { width: auto; max-width: 100%; }
+.saving-toggle { display: inline-flex; align-items: center; gap: .4rem; }
+.saving-toggle input { width: auto; margin: 0; }
+.match-table-scroll { overflow-x: auto; border: 1px solid #dce1e7; border-radius: .5rem; }
+.match-table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+.match-table :is(th, td) { padding: .55rem; border-bottom: 1px solid #dce1e7; text-align: start; vertical-align: top; }
+.match-table thead { background: #edf2f8; }
+.match-table tbody tr:nth-child(even) { background: #fafbfd; }
+.match-table tbody tr:last-child > * { border-bottom: 0; }
+.match-table th[scope=row] { min-width: 8rem; overflow-wrap: anywhere; }
+.match-status { display: inline-block; border-radius: 1rem; padding: .18rem .5rem; white-space: nowrap; background: #eef0f3; color: #424e60; }
+tr[data-match=good] .match-status { background: #e4f5eb; color: #145b37; }
+tr[data-match=similar] .match-status { background: #fff0d5; color: #754600; }
+.product-cell { min-width: 14rem; }
+.product-cell select { font-size: .88rem; max-width: 16rem; }
+.product-preview { display: flex; gap: .5rem; align-items: center; }
+.product-thumbnail { flex: none; width: 3rem; height: 3rem; object-fit: contain; border: 1px solid #dce1e7; border-radius: .3rem; background: #fff; }
+.no-image { display: grid; place-content: center; padding: .15rem; text-align: center; font-size: .7rem; color: #4b586a; }
+.match-number { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.match-difference { margin-top: .35rem; }
+.match-saving[data-direction=positive] { color: #145b37; font-weight: 600; }
+.match-saving[data-direction=negative] { color: #9b3030; font-weight: 600; }

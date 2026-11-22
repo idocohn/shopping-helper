@@ -1,4 +1,4 @@
-import {pdfRows, parseOrder, parseBasket, candidatesFor, cost, summarize} from './comparison.mjs?v=2';
+import {pdfRows, parseOrder, parseBasket, candidatesFor, cost, saving, summarize} from './comparison.mjs?v=3';
 
 const $ = id => document.getElementById(id);
 const money = new Intl.NumberFormat('en-IL', {style: 'currency', currency: 'ILS'});
@@ -91,7 +91,11 @@ function listSchema(fields) {
 }
 
 function setBasket(items) {
-  $('basket').value = items.map(({name, quantity, size}) => [name, quantity, size].join(' | ')).join('\n');
+  $('basket').value = items.map(({name, quantity, size, paidCents}) => {
+    const fields = [name, quantity, size];
+    if (Number.isFinite(paidCents)) fields.push((paidCents / 100).toFixed(2));
+    return fields.join(' | ');
+  }).join('\n');
   $('results').hidden = true;
   status.textContent = items.length + ' items found. Review the basket before comparing.';
 }
@@ -161,10 +165,11 @@ $('extract-ai').addEventListener('click', () => run('Extracting product lines wi
     reader.readAsDataURL(photo);
   });
   const result = await askOpenAI(key,
-    'Extract grocery product lines from this receipt or order. Preserve product names in the original language, pack sizes as written, and the number of packs ordered. Distinguish a weight-based purchase from the number of packages. If an item is sold by weight, use one pack and put the ordered weight in size. Skip addresses, payment data, totals, discounts and other non-product lines. Leave size blank when unknown.',
-    text || 'Read the receipt photo.', listSchema({name: 'string', quantity: 'integer', size: 'string'}), photoData);
+    'Extract grocery product lines from this receipt or order. Preserve product names in the original language, pack sizes as written, and the number of packs ordered. If sold by weight, use one pack and put the ordered weight in size. For paidTotal, use the total paid for that line in shekels after any discount explicitly attached to it. Return -1 when the paid line total or its currency is unclear. Do not use a unit price or allocate order-wide discounts. Skip personal information and other non-product lines. Leave size blank when unknown.',
+    text || 'Read the receipt photo.', listSchema({name: 'string', quantity: 'integer', size: 'string', paidTotal: 'number'}), photoData);
   const items = result.items.filter(item => item.name.trim() && item.quantity > 0 && item.quantity <= 1000).slice(0, maxItems)
-    .map(item => ({...item, name: item.name.replace(/[|\n]/g, ' '), size: item.size.replace(/[|\n]/g, ' ')}));
+    .map(item => ({...item, name: item.name.replace(/[|\n]/g, ' '), size: item.size.replace(/[|\n]/g, ' '),
+      paidCents: Number.isFinite(item.paidTotal) && item.paidTotal >= 0 ? Math.round(item.paidTotal * 100) : undefined}));
   if (!items.length) throw new Error('No product lines were found. Enter the items by hand.');
   setBasket(items);
   $('extract').hidden = true;
@@ -189,11 +194,12 @@ async function compare(useAI) {
     const products = catalog.products.filter(product => (product.source || 'hahishook') === source);
     if (!products.length) return [];
     const options = lines.map(line => candidatesFor(line, products));
-    const selected = options.map(candidates => {
+    const suggested = options.map(candidates => {
       const [first, second] = candidates;
-      return first?.exactName && first.exactSize && !(second?.exactName && second.exactSize) ? first.product : null;
+      return first?.exactName && first.exactSize && !(second?.exactName && second.exactSize)
+        ? {product: first.product, equivalent: true, fromAI: false} : null;
     });
-    return [{source, name, options, selected, suggested: []}];
+    return [{source, name, options, selected: Array(lines.length).fill(null), suggested}];
   });
   if (stores.length < 2) throw new Error('At least two store catalogs are needed to compare this basket.');
 
@@ -203,18 +209,37 @@ async function compare(useAI) {
   } catch (error) {
     aiError = error;
   }
-  comparison = {lines, stores};
+  const references = lines.map((line, index) => referencePrice(line, index, stores));
+  for (const store of stores) {
+    store.suggested.forEach((suggestion, index) => {
+      if (suggestion?.equivalent && store.options[index].some(option => option.product === suggestion.product && option.exactSize)
+          && saving(lines[index], suggestion.product, references[index]?.cents) > 0) {
+        store.selected[index] = suggestion.product;
+      }
+    });
+  }
+  comparison = {lines, stores, references};
   render();
   status.textContent = aiError
     ? aiError.message + ' The catalog comparison is available below.'
     : 'Compared ' + lines.length + ' basket items. Review the suggested substitutions.';
 }
 
+function referencePrice(line, index, stores) {
+  if (Number.isFinite(line.paidCents)) return {cents: line.paidCents, label: 'vs receipt'};
+  const shufersal = stores.find(store => store.source === 'shufersal');
+  const suggestion = shufersal?.suggested[index];
+  if (suggestion?.equivalent && shufersal.options[index].some(option => option.product === suggestion.product && option.exactSize)) {
+    return {cents: cost(line, suggestion.product).cents, label: 'vs Shufersal'};
+  }
+  return null;
+}
+
 async function suggestMatches(key, lines, stores) {
   const requests = [];
   for (const store of stores) {
     store.options.forEach((options, index) => {
-      if (store.selected[index] || !options.length) return;
+      if (store.suggested[index]?.equivalent || !options.length) return;
       const {name, size} = lines[index];
       requests.push({store, index, data: {
         id: requests.length, product: {name, size},
@@ -225,16 +250,16 @@ async function suggestMatches(key, lines, stores) {
   for (let start = 0; start < requests.length; start += 30) {
     const batch = requests.slice(start, start + 30);
     const result = await askOpenAI(key,
-      'For each request, select the closest genuinely usable candidate or return candidate -1. Options have zero-based indices. Preserve product type, flavor, dietary traits, and relevant variants. Return equivalent=true only when brand and product variant agree, allowing spelling differences and different packs. An acceptable different-brand or different-pack-format substitute can be suggested with equivalent=false. Never match products solely because they share one word. Do not estimate prices.',
-      batch.map(row => row.data), listSchema({id: 'integer', candidate: 'integer', equivalent: 'boolean'}));
+      'For each request, select the closest genuinely usable candidate or return candidate -1. Options have zero-based indices. Preserve product type, flavor, dietary traits, and relevant variants. Return equivalent=true only when brand and product variant agree, allowing spelling differences and different packs. A usable different-brand or different-variant substitute can be suggested with equivalent=false. In difference, explain any difference supported by the two product descriptions in one short English sentence. Leave difference blank if unknown or if the items and packs are the same. Never match products solely because they share one word. Do not estimate prices.',
+      batch.map(row => row.data), listSchema({id: 'integer', candidate: 'integer', equivalent: 'boolean', difference: 'string'}));
     for (const entry of result.items) {
       const request = batch[entry.id - start];
       if (!request || request.data.id !== entry.id) continue;
       const {store, index} = request;
       const option = store.options[index][entry.candidate];
       if (!option) continue;
-      store.suggested[index] = option.product;
-      if (entry.equivalent && option.exactSize) store.selected[index] = option.product;
+      store.suggested[index] = {product: option.product, equivalent: entry.equivalent, fromAI: true,
+        difference: typeof entry.difference === 'string' ? entry.difference.trim().slice(0, 240) : ''};
     }
   }
 }
@@ -249,68 +274,164 @@ function renderSummary(lines, stores) {
   const [best, second] = complete;
   $('recommendation').textContent = best
     ? (second?.total === best.total ? 'The complete baskets tie.' : best.name + (second ? ' has the lowest complete basket total.' : ' is the only store with a complete comparable basket.'))
-    : 'No store has a complete comparable basket. Use the shared-item subtotals to compare the same items.';
+    : 'No complete basket is selected. Shared-item subtotals compare the same items selected at both stores.';
   $('stores').replaceChildren(...summaries.map(store => {
     const card = element('article', '', 'store');
     const date = Date.parse(catalog.dates[store.source]);
     const freshness = Number.isFinite(date) ? 'Snapshot ' + new Date(date).toLocaleDateString() + (Date.now() - date > 172800000 ? ' · check current prices' : '') : 'Snapshot date unavailable';
     card.append(element('h3', store.name), element('p', freshness, 'hint'),
-      element('p', store.matched + ' of ' + lines.length + ' items matched'),
+      element('p', store.matched + ' of ' + lines.length + ' items selected'),
       element('p', store.matched ? (store.complete ? 'Complete basket: ' : 'Selected items: ') + formatPrice(store.total) : 'No priced matches selected'));
     if (store.sharedCount) card.append(element('p', 'Same ' + store.sharedCount + ' items: ' + formatPrice(store.sharedTotal), 'hint'));
     return card;
   }));
 }
 
-function updateSelectionLabel(target, line, product) {
-  target.replaceChildren();
-  if (!product) return;
-  const selection = cost(line, product);
-  target.textContent = selection.packages + ' pack(s) · ' + formatPrice(selection.cents) + (selection.comparable ? '' : ' · check size');
-  if (/^https?:\/\//i.test(product.product_url || '')) {
-    const link = element('a', 'Product');
-    link.href = product.product_url;
-    link.target = '_blank';
-    link.rel = 'noopener';
-    target.append(' · ', link);
+const matchLabels = {good: 'Good match', similar: 'Similar', none: 'No match'};
+const matchOrder = {good: 0, similar: 1, none: 2};
+
+function filterMatches() {
+  const filter = $('match-filter').value;
+  const onlySavings = $('savings-only').checked;
+  const rows = Array.from($('matches').rows);
+  let visible = 0;
+  for (const row of rows) {
+    const match = row.dataset.match;
+    const included = filter === 'all' || (filter === 'matched' ? match !== 'none' : filter === match);
+    row.hidden = !included || (onlySavings && row.dataset.saving !== 'yes');
+    if (!row.hidden) visible++;
   }
+  $('match-count').textContent = visible ? visible + ' of ' + rows.length + ' rows' : 'No rows match. Change the filters to see more.';
+}
+
+$('match-filter').addEventListener('change', filterMatches);
+$('savings-only').addEventListener('change', filterMatches);
+
+function sortMatches() {
+  const body = $('matches');
+  const rows = Array.from(body.rows);
+  const sorted = rows.slice().sort((a, b) => matchOrder[a.dataset.match] - matchOrder[b.dataset.match] || Number(a.dataset.order) - Number(b.dataset.order));
+  sorted.forEach((row, i) => {
+    if (body.rows[i] !== row) body.insertBefore(row, body.rows[i]);
+  });
+}
+
+function productPreview(product) {
+  const preview = element('div', '', 'product-preview');
+  const placeholder = element('span', 'No image', 'product-thumbnail no-image');
+  if (/^https:\/\/(?:www\.)?hahishook\.com\//i.test(product.image_url || '')) {
+    const img = element('img', '', 'product-thumbnail');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.referrerPolicy = 'no-referrer';
+    img.addEventListener('error', () => img.replaceWith(placeholder), {once: true});
+    img.src = product.image_url;
+    preview.append(img);
+  } else {
+    preview.append(placeholder);
+  }
+  const link = /^https?:\/\//i.test(product.product_url || '');
+  const name = element(link ? 'a' : 'span', product.name);
+  name.dir = 'auto';
+  if (link) {
+    name.href = product.product_url;
+    name.target = '_blank';
+    name.rel = 'noopener';
+  }
+  preview.append(name);
+  return preview;
+}
+
+function matchRow(line, store, index, order, reference) {
+  const row = element('tr');
+  row.dataset.order = order;
+  const item = element('th', line.name);
+  item.scope = 'row';
+  item.dir = 'auto';
+  item.append(element('div', line.quantity + ' × ' + (line.size || 'pack'), 'hint'));
+  const statusCell = element('td');
+  const badge = element('span', '', 'match-status');
+  statusCell.append(badge);
+  const productCell = element('td', '', 'product-cell');
+  const preview = element('div');
+  const select = element('select');
+  const options = store.options[index];
+  select.dir = 'auto';
+  select.setAttribute('aria-label', store.name + ' product for ' + line.name);
+  select.append(new Option('No product selected', ''));
+  options.forEach(({product}, optionIndex) => {
+    const size = product.size_text ? ' · ' + product.size_text : '';
+    const suggestion = store.suggested[index];
+    const suggested = suggestion?.product === product && suggestion.fromAI ? ' · AI suggestion' : '';
+    select.append(new Option(product.name + size + ' · ' + formatPrice(Math.round(product.price_nis * 100)) + suggested, String(optionIndex)));
+  });
+  const selected = options.findIndex(option => option.product === store.selected[index]);
+  select.value = selected < 0 ? '' : String(selected);
+  productCell.append(preview);
+  if (options.length) productCell.append(select);
+  const packs = element('td', '', 'match-number');
+  const total = element('td', '', 'match-number');
+  const savings = element('td', '', 'match-number');
+  row.append(item, element('td', store.name), statusCell, productCell, packs, total, savings);
+
+  function updateRow() {
+    const product = store.selected[index];
+    const suggestion = store.suggested[index];
+    const displayed = product || suggestion?.product;
+    const candidate = options.find(option => option.product === displayed);
+    const equivalent = candidate?.exactName || (suggestion?.product === displayed && suggestion?.equivalent);
+    const match = displayed && candidate?.exactSize && equivalent ? 'good' : displayed ? 'similar' : 'none';
+    row.dataset.match = match;
+    badge.textContent = matchLabels[match];
+    preview.replaceChildren(displayed ? productPreview(displayed) : document.createTextNode('—'));
+    if (match === 'similar') {
+      const differences = [];
+      if (suggestion?.product === displayed && suggestion.difference) differences.push(suggestion.difference);
+      else if (!equivalent) differences.push('Different product name or variant.');
+      if (!candidate.exactSize) {
+        differences.push(line.size && displayed.size_text
+          ? 'Pack on order: ' + line.size + ' · catalog: ' + displayed.size_text + '.'
+          : 'Pack size could not be verified.');
+      }
+      const difference = element('div', differences.join(' '), 'hint match-difference');
+      difference.dir = 'auto';
+      preview.append(difference);
+    }
+    if (!product && suggestion) preview.append(element('div', 'Select to include in totals', 'hint'));
+    const price = displayed && cost(line, displayed);
+    packs.textContent = price ? String(price.packages) : '—';
+    total.textContent = price ? formatPrice(price.cents) : '—';
+    if (price && !price.comparable) packs.append(element('div', 'Check size', 'hint'));
+    const difference = displayed ? saving(line, displayed, reference?.cents) : null;
+    row.dataset.saving = difference > 0 ? 'yes' : 'no';
+    const signedPrice = difference == null ? '—' : (difference > 0 ? '+' : difference < 0 ? '−' : '') + formatPrice(Math.abs(difference));
+    const savingLabel = element('span', signedPrice, 'match-saving');
+    savingLabel.dataset.direction = difference > 0 ? 'positive' : difference < 0 ? 'negative' : 'neutral';
+    savings.replaceChildren(savingLabel);
+    if (difference != null) savings.append(element('div', reference.label, 'hint'));
+  }
+
+  select.addEventListener('change', () => {
+    store.selected[index] = select.value === '' ? null : options[Number(select.value)].product;
+    if (!store.selected[index]) store.suggested[index] = null;
+    updateRow();
+    renderSummary(comparison.lines, comparison.stores);
+    sortMatches();
+    filterMatches();
+  });
+  updateRow();
+  return row;
 }
 
 function render() {
-  const {lines, stores} = comparison;
+  const {lines, stores, references} = comparison;
   renderSummary(lines, stores);
-  $('matches').replaceChildren(...lines.map((line, index) => {
-    const card = element('article', '', 'item');
-    const heading = element('h4', line.name + ' × ' + line.quantity + (line.size ? ' · ' + line.size : ''));
-    heading.dir = 'auto';
-    const fields = element('div', '', 'options');
-    for (const store of stores) {
-      const label = element('label', store.name);
-      const select = element('select');
-      select.dir = 'auto';
-      select.append(new Option('Unmatched', ''));
-      const options = store.options[index];
-      options.forEach(({product}, optionIndex) => {
-        const name = product.name + (product.size_text ? ' · ' + product.size_text : '') +
-          ' · ' + formatPrice(Math.round(product.price_nis * 100)) +
-          (store.suggested[index] === product ? ' · AI suggestion' : '');
-        select.append(new Option(name, String(optionIndex)));
-      });
-      const selected = options.findIndex(option => option.product === store.selected[index]);
-      select.value = selected < 0 ? '' : String(selected);
-      const detail = element('div', '', 'hint');
-      updateSelectionLabel(detail, line, store.selected[index]);
-      select.addEventListener('change', () => {
-        store.selected[index] = select.value === '' ? null : options[Number(select.value)].product;
-        updateSelectionLabel(detail, line, store.selected[index]);
-        renderSummary(lines, stores);
-      });
-      label.append(select, detail);
-      fields.append(label);
-    }
-    card.append(heading, fields);
-    return card;
-  }));
+  $('matches').replaceChildren(...lines.flatMap((line, index) => stores.map((store, order) =>
+    matchRow(line, store, index, index * stores.length + order, references[index]))));
+  $('match-filter').value = 'matched';
+  $('savings-only').checked = true;
+  sortMatches();
+  filterMatches();
   $('results').hidden = false;
 }
 

@@ -17,6 +17,10 @@ on your phone or computer to browse and search without installing anything.
 Open **Compare a basket** to import a Shufersal text PDF, submit a receipt
 photo or other text receipt to AI, or enter items by hand. The screen compares covered items
 and estimated prices from the Hahishook and Shufersal store 003 snapshots.
+The results table shows product photos where available, match status, and
+savings against the receipt's paid line price or a verified Shufersal price.
+It opens on rows with positive savings and automatically selects good matches
+that cost less. Similar products show their differences for review.
 For AI actions, enter an OpenAI API key. The browser uses it for that action,
 sends it directly to OpenAI, and clears the field. For scanned PDFs, upload a
 photo of the receipt or paste the item lines.

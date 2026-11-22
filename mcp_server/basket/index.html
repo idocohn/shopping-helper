@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.openai.com; img-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.openai.com; img-src 'self' blob: https://hahishook.com https://www.hahishook.com; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Compare a basket · Shopping Helper</title>
-  <link rel="stylesheet" href="./style.css">
-  <script type="module" src="./app.mjs?v=4"></script>
+  <link rel="stylesheet" href="./style.css?v=3">
+  <script type="module" src="./app.mjs?v=6"></script>
 </head>
 <body>
   <main>
@@ -32,7 +32,7 @@
       </div>
       <label for="basket">Basket items</label>
       <textarea id="basket" rows="7" dir="auto" placeholder="מיונז אמיתי הלמנס | 2 | 394 גרם"></textarea>
-      <p class="hint">One item per line, in the format <code>product | quantity | pack size</code>. Review the imported items before comparing.</p>
+      <p class="hint">One item per line, in the format <code>product | quantity | pack size | paid line total</code>. The paid total is optional. Review imported quantities and prices.</p>
     </section>
     <section>
       <h2>2. Compare stores</h2>
@@ -51,7 +51,25 @@
       <p class="hint">Totals use catalog prices and whole packs. Delivery, membership charges and promotions are excluded. Review the matched products and pack sizes before ordering.</p>
       <div id="stores"></div>
       <h3>Review items</h3>
-      <div id="matches"></div>
+      <div class="match-toolbar">
+        <label for="match-filter">Filter by matched status</label>
+        <select id="match-filter">
+          <option value="all">All rows</option>
+          <option value="matched" selected>Good match or similar</option>
+          <option value="good">Good match</option>
+          <option value="similar">Similar</option>
+          <option value="none">No match</option>
+        </select>
+        <label class="saving-toggle"><input id="savings-only" type="checkbox" checked> Savings only</label>
+        <p id="match-count" role="status" class="hint"></p>
+      </div>
+      <p id="match-help" class="hint">Savings use the paid receipt price or a verified Shufersal match as the reference. Good matches with savings are selected automatically. Select a similar product to include it in totals.</p>
+      <div class="match-table-scroll" role="region" aria-label="Basket matches" tabindex="0">
+        <table class="match-table" aria-describedby="match-help">
+          <thead><tr><th scope="col">Order item</th><th scope="col">Store</th><th scope="col">Matched</th><th scope="col">Product</th><th scope="col">Packs</th><th scope="col">Total</th><th scope="col">Savings</th></tr></thead>
+          <tbody id="matches"></tbody>
+        </table>
+      </div>
     </section>
   </main>
 </body>

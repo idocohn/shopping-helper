@@ -22,12 +22,16 @@ export function pdfRows(items) {
 export function parseOrder(rows) {
   const lines = [];
   let item;
+  let lastLine;
+  let discount = false;
   for (const row of rows) {
     const divider = row.lastIndexOf('|');
     if (divider > 0) {
       const name = row.slice(0, divider).trim();
       const size = row.slice(divider + 1).trim();
       item = /גרם|ליטר|[ממ]"ל|יחידות|גלילים|משקל|\d/u.test(size) ? {name, size} : undefined;
+      lastLine = undefined;
+      discount = false;
       continue;
     }
     const quantity = row.trim().match(quantityPattern);
@@ -40,19 +44,39 @@ export function parseOrder(rows) {
         item.quantity = Number(amount);
       }
       lines.push(item);
+      lastLine = item;
       item = undefined;
+      continue;
     }
+    if (!lastLine) continue;
+    if (row.trim() === 'הנחה') {
+      discount = true;
+      continue;
+    }
+    const amount = row.match(/₪\s*([\d,]+\.\d{2})\s*$/u);
+    if (!amount) continue;
+    const cents = Math.round(Number(amount[1].replaceAll(',', '')) * 100);
+    if (discount && /^\s*-\s*₪/u.test(row) && cents <= lastLine.paidCents) lastLine.paidCents -= cents;
+    if (lastLine.paidCents == null && (row.match(/₪/gu) || []).length === 2) lastLine.paidCents = cents;
+    discount = false;
   }
   return lines;
 }
 
 export function parseBasket(text) {
   return text.split('\n').flatMap(row => {
-    const [name, count, size] = row.split('|').map(value => value.trim());
+    const [name, count, size, paid] = row.split('|').map(value => value.trim());
     if (!name) return [];
     const quantity = count ? Number(count) : 1;
     if (!Number.isInteger(quantity) || quantity <= 0 || quantity > 1000) throw new Error('Use a whole-number quantity between 1 and 1,000.');
-    return [{name, quantity, size: size || ''}];
+    const item = {name, quantity, size: size || ''};
+    if (paid) {
+      const amount = paid.replace(/[₪,\\\s]/gu, '');
+      const cents = Math.round(Number(amount) * 100);
+      if (!/^\d+(?:\.\d{1,2})?$/u.test(amount) || !Number.isSafeInteger(cents)) throw new Error('Enter the paid line total in shekels, for example 20.00.');
+      item.paidCents = cents;
+    }
+    return [item];
   });
 }
 
@@ -131,6 +155,11 @@ export function cost(line, product) {
   const comparable = Boolean(wanted && available && wanted.dimension === available.dimension);
   const packages = comparable ? Math.ceil(line.quantity * wanted.amount / available.amount - 1e-8) : line.quantity;
   return {packages, cents: Math.round(product.price_nis * 100) * packages, comparable};
+}
+
+export function saving(line, product, referenceCents) {
+  const price = cost(line, product);
+  return price.comparable && Number.isFinite(referenceCents) ? referenceCents - price.cents : null;
 }
 
 export function summarize(lines, stores) {
