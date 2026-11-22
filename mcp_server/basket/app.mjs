@@ -61,7 +61,18 @@ async function askOpenAI(key, task, data, schema, photo) {
     throw new Error('Could not reach OpenAI. Try again or compare without AI.');
   }
   if (response.status === 401) throw new Error('OpenAI rejected the API key. Check the key and try again.');
-  if (response.status === 429) throw new Error('OpenAI returned a usage limit. Check your API account or compare without AI.');
+  if (response.status === 429) {
+    const body = await response.json().catch(() => null);
+    const code = body?.error?.code;
+    const type = body?.error?.type;
+    if (code === 'insufficient_quota' || type === 'insufficient_quota' || code === 'billing_hard_limit_reached') {
+      throw new Error('Your OpenAI API project is out of quota. Check API billing, available credits, and spending limits, then retry.');
+    }
+    if (code === 'rate_limit_exceeded' || type === 'rate_limit_exceeded') {
+      throw new Error('OpenAI temporarily rate-limited this request. Wait a minute, then retry.');
+    }
+    throw new Error('OpenAI returned HTTP 429 without a specific reason. Check API billing and usage limits before retrying.');
+  }
   if (!response.ok) throw new Error('OpenAI returned an error (' + response.status + '). Check your API account or compare without AI.');
   const body = await response.json();
   const content = body.output?.flatMap(item => item.content || []).find(item => item.type === 'output_text');
@@ -186,37 +197,46 @@ async function compare(useAI) {
   });
   if (stores.length < 2) throw new Error('At least two store catalogs are needed to compare this basket.');
 
-  if (key) {
-    const requests = [];
-    for (const store of stores) {
-      store.options.forEach((options, index) => {
-        if (store.selected[index] || !options.length) return;
-        const {name, size} = lines[index];
-        requests.push({store, index, data: {
-          id: requests.length, product: {name, size},
-          options: options.map(({product}) => ({name: product.name, size: product.size_text})),
-        }});
-      });
-    }
-    for (let start = 0; start < requests.length; start += 30) {
-      const batch = requests.slice(start, start + 30);
-      const result = await askOpenAI(key,
-        'For each request, select the closest genuinely usable candidate or return candidate -1. Options have zero-based indices. Preserve product type, flavor, dietary traits, and relevant variants. Return equivalent=true only when brand and product variant agree, allowing spelling differences and different packs. An acceptable different-brand or different-pack-format substitute can be suggested with equivalent=false. Never match products solely because they share one word. Do not estimate prices.',
-        batch.map(row => row.data), listSchema({id: 'integer', candidate: 'integer', equivalent: 'boolean'}));
-      for (const entry of result.items) {
-        const request = batch[entry.id - start];
-        if (!request || request.data.id !== entry.id) continue;
-        const {store, index} = request;
-        const option = store.options[index][entry.candidate];
-        if (!option) continue;
-        store.suggested[index] = option.product;
-        if (entry.equivalent && option.exactSize) store.selected[index] = option.product;
-      }
-    }
+  let aiError;
+  try {
+    if (key) await suggestMatches(key, lines, stores);
+  } catch (error) {
+    aiError = error;
   }
   comparison = {lines, stores};
   render();
-  status.textContent = 'Compared ' + lines.length + ' basket items. Review the suggested substitutions.';
+  status.textContent = aiError
+    ? aiError.message + ' The catalog comparison is available below.'
+    : 'Compared ' + lines.length + ' basket items. Review the suggested substitutions.';
+}
+
+async function suggestMatches(key, lines, stores) {
+  const requests = [];
+  for (const store of stores) {
+    store.options.forEach((options, index) => {
+      if (store.selected[index] || !options.length) return;
+      const {name, size} = lines[index];
+      requests.push({store, index, data: {
+        id: requests.length, product: {name, size},
+        options: options.map(({product}) => ({name: product.name, size: product.size_text})),
+      }});
+    });
+  }
+  for (let start = 0; start < requests.length; start += 30) {
+    const batch = requests.slice(start, start + 30);
+    const result = await askOpenAI(key,
+      'For each request, select the closest genuinely usable candidate or return candidate -1. Options have zero-based indices. Preserve product type, flavor, dietary traits, and relevant variants. Return equivalent=true only when brand and product variant agree, allowing spelling differences and different packs. An acceptable different-brand or different-pack-format substitute can be suggested with equivalent=false. Never match products solely because they share one word. Do not estimate prices.',
+      batch.map(row => row.data), listSchema({id: 'integer', candidate: 'integer', equivalent: 'boolean'}));
+    for (const entry of result.items) {
+      const request = batch[entry.id - start];
+      if (!request || request.data.id !== entry.id) continue;
+      const {store, index} = request;
+      const option = store.options[index][entry.candidate];
+      if (!option) continue;
+      store.suggested[index] = option.product;
+      if (entry.equivalent && option.exactSize) store.selected[index] = option.product;
+    }
+  }
 }
 
 $('compare-ai').addEventListener('click', () => run('Checking catalog matches with OpenAI…', () => compare(true)));

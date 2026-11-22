@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.openai.com; img-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Compare a basket · Shopping Helper</title>
   <link rel="stylesheet" href="./style.css">
-  <script type="module" src="./app.mjs?v=2"></script>
+  <script type="module" src="./app.mjs?v=3"></script>
 </head>
 <body>
   <main>
@@ -38,7 +38,7 @@
       <h2>2. Compare stores</h2>
       <label for="api-key">Your OpenAI API key</label>
       <input id="api-key" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="sk-…" aria-describedby="key-note">
-      <p class="hint" id="key-note">The browser sends the key directly to OpenAI for each AI action and clears this field. This site never saves it. OpenAI usage is billed to your account.</p>
+      <p class="hint" id="key-note">The browser sends the key directly to OpenAI for each AI action and clears this field. This site never saves it. OpenAI usage is billed separately through <a href="https://platform.openai.com/settings/organization/billing/overview" target="_blank" rel="noopener">API billing</a>.</p>
       <div class="actions">
         <button id="compare-ai" type="button" disabled>Compare with AI</button>
         <button id="compare-local" type="button" class="secondary" disabled>Compare without AI</button>
