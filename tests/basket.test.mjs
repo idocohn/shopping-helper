@@ -103,6 +103,23 @@ test('ranks an exact pack but preserves percentage variants and filters unavaila
   assert.equal(candidates[1].exactName, false);
 });
 
+test('flags Hilda mayonnaise and Buli peanut puffs as brand substitutes even at the same weight', () => {
+  const groceries = {source: 'hahishook', size_text: '500 גרם', price_nis: 8.2, in_stock: true};
+  const hilda = {...groceries, name: 'מיונז אמיתי', product_id: '125771'};
+  const hellmanns = {...groceries, name: 'מיונז אמיתי הלמנס', product_id: '200'};
+  const mayo = candidatesFor({name: 'מיונז אמיתי הלמנס', size: '500 גרם'}, [hilda, hellmanns]);
+  assert.equal(mayo[0].exactName, true);
+  assert.equal(mayo[0].brandDifference, '');
+  assert.equal(mayo[1].exactSize, true);
+  assert.match(mayo[1].brandDifference, /Hilda.*Hellmann/);
+
+  const buli = {...groceries, name: 'בולי בוטנים (במבה)', size_text: '80 גרם'};
+  const [snack] = candidatesFor({name: 'במבה אסם', size: '80 גרם'}, [buli]);
+  assert.equal(snack.exactSize, true);
+  assert.equal(snack.exactName, false);
+  assert.match(snack.brandDifference, /Buli.*Osem Bamba/);
+});
+
 test('compares shared items and avoids calling a partial basket complete', () => {
   const lines = parseBasket('חלב | 2 | 1 ליטר\nמיונז | 1 | 500 גרם');
   const milk = {size_text: '1 ליטר', price_nis: 7};

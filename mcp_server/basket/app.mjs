@@ -1,4 +1,4 @@
-import {pdfRows, parseOrder, parseBasket, candidatesFor, cost, saving} from './comparison.mjs?v=4';
+import {pdfRows, parseOrder, parseBasket, candidatesFor, cost, saving} from './comparison.mjs?v=5';
 import {canCheckout, checkoutUrl, openHahishookCart} from './checkout.mjs?v=2';
 import {mountTableFilters} from './table-filters.mjs';
 
@@ -327,7 +327,6 @@ async function loadCatalog() {
 let catalog;
 let comparison;
 const checkoutItems = new Map();
-const basketDecisions = new Set();
 const basketSelections = new WeakMap();
 let checkoutChecks = [];
 let checkoutVisible = false;
@@ -428,7 +427,7 @@ async function suggestMatches(key, lines, stores, progress) {
       const {name, size} = lines[index];
       requests.push({store, index, data: {
         id: requests.length, product: {name, size},
-        options: options.map(({product}) => ({name: product.name, size: product.size_text})),
+        options: options.map(({product}) => ({name: product.name, size: product.size_text, brand: product.brand || undefined})),
       }});
     });
   }
@@ -447,7 +446,7 @@ async function suggestMatches(key, lines, stores, progress) {
       if (entry.candidate !== -1 && !option) continue;
       reviewed.add(entry.id);
       if (option) {
-        store.suggested[index] = {product: option.product, equivalent: entry.equivalent, fromAI: true,
+        store.suggested[index] = {product: option.product, equivalent: entry.equivalent && !option.brandDifference, fromAI: true,
           difference: typeof entry.difference === 'string' ? entry.difference.trim().slice(0, 240) : ''};
       }
     }
@@ -551,7 +550,6 @@ function renderCheckoutItems() {
     });
     remove.addEventListener('click', () => {
       checkoutItems.delete(key);
-      basketDecisions.add(key);
       renderCheckoutItems();
       renderCheckout('Removed ' + item.product.name + ' from the Hahishook basket.');
       $('checkout-title').focus();
@@ -669,7 +667,6 @@ function matchRow(offer) {
     checkbox.checked = checkoutItems.get(key)?.product === offer.chosen;
   }
   function setSelected(checked) {
-    basketDecisions.add(key);
     if (checked) {
       const product = offer.chosen;
       checkoutItems.set(key, {product, quantity: cost(line, product).packages});
@@ -688,14 +685,14 @@ function matchRow(offer) {
   function updateRow() {
     const product = offer.chosen;
     const candidate = options.find(option => option.product === product);
-    const equivalent = suggestion.product === product ? suggestion.equivalent : candidate.exactName;
+    const equivalent = !candidate.brandDifference && (suggestion.product === product ? suggestion.equivalent : candidate.exactName);
     const match = candidate.exactSize && equivalent ? 'good' : 'similar';
     row.dataset.match = match;
     badge.textContent = matchLabels[match];
     preview.replaceChildren(productPreview(product));
     const differences = [];
     if (match === 'good') differences.push('Same listed product and pack size.');
-    if (!equivalent) differences.push((suggestion.product === product && suggestion.difference)
+    if (!equivalent) differences.push(candidate.brandDifference || (suggestion.product === product && suggestion.difference)
       || candidate.localDifference || 'Catalog product: ' + product.name + '. Compare the brand or variant with the order.');
     if (!candidate.exactSize) differences.push('Order pack: ' + line.size + ' · Hahishook pack: ' + product.size_text + '.');
     const detail = element('div', differences.join(' '), 'hint match-difference');
@@ -711,9 +708,6 @@ function matchRow(offer) {
     savings.replaceChildren(savingLabel, element('div', reference.label, 'hint'));
     tableFilters.setRowData(row, {order: index, item: line.name, match, product: product.name,
       packs: price.packages, total: price.cents, savings: difference});
-    if (match === 'good' && !basketDecisions.has(key) && !checkoutItems.has(key)) {
-      checkoutItems.set(key, {product, quantity: price.packages});
-    }
     updateCheckbox();
   }
 

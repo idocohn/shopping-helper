@@ -140,6 +140,22 @@ const substitutionRules = [
   [/מגבונים.*ללא בישום/u, /מגבונים.*ללא בישום/u, 'Fragrance-free wipes from a different brand.'],
 ];
 
+function substituteBrand(orderName, product) {
+  if (product.source !== 'hahishook') return '';
+  const catalogName = `${product.name} ${product.brand || ''}`;
+  const hellmanns = /הלמנס|hellmann/iu;
+  if (hellmanns.test(orderName) && /מיונז|mayonnaise/iu.test(product.name) && !hellmanns.test(catalogName)) {
+    if (String(product.product_id) === '125771' || /hilda|הילדה/iu.test(catalogName)) {
+      return 'Hilda mayonnaise is a different brand from Hellmann’s.';
+    }
+    return 'The catalog brand is unverified for this Hellmann’s substitute.';
+  }
+  if (/במבה|bamba/iu.test(orderName) && !/בולי|buli/iu.test(orderName) && /בולי|buli/iu.test(catalogName)) {
+    return 'Buli peanut puffs are a different brand from Osem Bamba.';
+  }
+  return '';
+}
+
 export function candidatesFor(line, products, limit = 6, eligible = () => true) {
   const input = new Set(terms(line.name));
   if (!input.size) return [];
@@ -155,9 +171,11 @@ export function candidatesFor(line, products, limit = 6, eligible = () => true) 
     const compatible = expected && size && expected.dimension === size.dimension;
     const exactSize = compatible && Math.abs(expected.amount - size.amount) < 0.01;
     const score = 2 * common / (input.size + words.size);
-    const exactName = productName(line.name) === productName(product.name);
-    const localDifference = rule?.[2] || (common >= 2 && score >= 0.72 ? 'Compare the product names for brand or variant differences.' : '');
-    return [{product, exactName, exactSize, localDifference, rank: score + (exactSize ? 0.12 : 0) + (exactName ? 0.2 : 0) + (rule ? 0.15 : 0)}];
+    const brandDifference = substituteBrand(line.name, product);
+    const exactName = !brandDifference && productName(line.name) === productName(product.name);
+    const localDifference = brandDifference || rule?.[2] || (common >= 2 && score >= 0.72 ? 'Compare the product names for brand or variant differences.' : '');
+    return [{product, exactName, exactSize, localDifference, brandDifference,
+      rank: score + (exactSize ? 0.12 : 0) + (exactName ? 0.2 : 0) + (rule ? 0.15 : 0)}];
   }).sort((a, b) => b.rank - a.rank).slice(0, limit);
 }
 
