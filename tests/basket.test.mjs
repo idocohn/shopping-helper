@@ -77,6 +77,19 @@ test('shortlists crushed tomatoes as a substitute candidate for tomato puree', (
   assert.equal(unrelated, undefined);
 });
 
+test('offers a grounded substitute even when product names differ and skips options without savings', () => {
+  const line = {name: 'דובונים חטיף תפוחי אדמה דובונים', quantity: 9, size: '40 גרם'};
+  const base = {source: 'hahishook', size_text: '80 גרם', in_stock: true};
+  const products = [
+    {...base, name: 'דובונים', price_nis: 9},
+    {...base, name: 'מקלות תפוח אדמה', price_nis: 5.3},
+  ];
+  const [candidate, expensive] = candidatesFor(line, products, 6, product => saving(line, product, 3000) > 0);
+  assert.equal(candidate.product, products[1]);
+  assert.match(candidate.localDifference, /Potato sticks/);
+  assert.equal(expensive, undefined);
+});
+
 test('ranks an exact pack but preserves percentage variants and filters unavailable products', () => {
   const lines = parseBasket('חלב 3% תנובה | 2 | 1 ליטר\nמיונז | 1 | 500 גרם');
   const candidates = candidatesFor(lines[0], [

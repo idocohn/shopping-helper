@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.openai.com; img-src 'self' blob: https://hahishook.com https://www.hahishook.com; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Compare a basket · Shopping Helper</title>
-  <link rel="stylesheet" href="./style.css?v=6">
-  <script type="module" src="./start.mjs?v=4"></script>
+  <link rel="stylesheet" href="./style.css?v=7">
+  <script type="module" src="./start.mjs?v=5"></script>
 </head>
 <body>
   <main>
@@ -40,11 +40,12 @@
       <p class="hint">One item per line, in the format <code>product | quantity | pack size | paid line total</code>. The paid total is optional. Review imported quantities and prices.</p>
     </section>
     <section class="setup-panel">
-      <h2>Compare stores</h2>
+      <h2>Find cheaper options</h2>
       <label for="api-key">Your OpenAI API key</label>
-      <input id="api-key" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="sk-…" aria-describedby="key-note key-error">
+      <input id="api-key" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="sk-…" aria-describedby="key-note key-error key-status">
       <p id="key-error" class="error" role="alert" hidden></p>
-      <p class="hint" id="key-note">Leave this blank to compare using the catalog. A key enables AI matching. The browser sends it directly to OpenAI and clears the field after use. OpenAI usage is billed separately through <a href="https://platform.openai.com/settings/organization/billing/overview" target="_blank" rel="noopener">API billing</a>.</p>
+      <p id="key-status" class="hint" role="status" hidden></p>
+      <p class="hint" id="key-note">Leave this blank to compare using the catalog. The browser checks pasted keys directly with OpenAI and clears the field after use. AI usage is billed separately through <a href="https://platform.openai.com/settings/organization/billing/overview" target="_blank" rel="noopener">API billing</a>.</p>
       <div class="actions">
         <button id="compare" type="button" disabled>Compare</button>
       </div>
@@ -60,30 +61,19 @@
         </div>
         <a class="action-link secondary" href="#checkout-panel" id="review-basket">Review basket <span id="basket-badge">0</span></a>
       </div>
-      <p id="recommendation"></p>
-      <p id="match-help" class="hint">Savings use the receipt price or a verified Shufersal price. Good matches with savings are preselected for comparison. Use <strong>Add to basket</strong> to choose what goes to Hahishook.</p>
-      <p class="hint swipe-hint">Swipe the table to see prices and basket actions.</p>
+      <p id="match-help" class="hint">Only cheaper Hahishook options are shown. Savings use the receipt price or a verified Shufersal price. Check the items you want in your cart.</p>
+      <p class="hint swipe-hint">Swipe the table to see prices and filters.</p>
       <p id="match-count" role="status" class="hint"></p>
       <div class="match-table-scroll" role="region" aria-label="Basket matches" tabindex="0">
         <table class="match-table" aria-describedby="match-help">
           <thead><tr>
-            <th scope="col">Order item</th>
-            <th scope="col">Store</th>
-            <th scope="col" aria-label="Matched">Matched
-              <select id="match-filter" class="column-filter" aria-label="Filter by matched status">
-                <option value="all">All rows</option>
-                <option value="matched" selected>Good or similar</option>
-                <option value="good">Good match</option>
-                <option value="similar">Similar</option>
-                <option value="none">No match</option>
-              </select>
-            </th>
-            <th scope="col">Product</th>
-            <th scope="col">Packs</th>
-            <th scope="col">Total</th>
-            <th scope="col" aria-label="Savings">Savings
-              <label class="saving-toggle"><input id="savings-only" type="checkbox" checked> Savings only</label>
-            </th>
+            <th scope="col" class="basket-select"><label><input type="checkbox" id="select-all" aria-label="Select all visible items"> Select all</label></th>
+            <th scope="col" data-column="item">Order item</th>
+            <th scope="col" data-column="match">Matched</th>
+            <th scope="col" data-column="product">Hahishook option</th>
+            <th scope="col" data-column="packs">Packs</th>
+            <th scope="col" data-column="total">Total</th>
+            <th scope="col" data-column="savings">Savings</th>
           </tr></thead>
           <tbody id="matches"></tbody>
         </table>
@@ -93,14 +83,15 @@
       <div class="checkout-content">
         <div>
           <h2 id="checkout-title" tabindex="-1">Your Hahishook basket</h2>
-          <p id="checkout-empty">Add products from the comparison to start your basket.</p>
+          <p id="checkout-empty">Select products in the table to start your basket.</p>
           <ul id="checkout-items" class="checkout-items"></ul>
         </div>
         <div class="checkout-summary" id="checkout-summary" hidden>
           <div class="checkout-totals"><span id="checkout-count"></span><strong id="checkout-subtotal"></strong></div>
           <p class="hint">Estimated catalog subtotal. Hahishook confirms availability, prices, fees and delivery at checkout.</p>
-          <a class="action-link checkout-link" id="checkout-link" target="_blank" rel="noopener noreferrer">Continue to Hahishook checkout</a>
+          <button type="button" class="checkout-link" id="checkout-link">Open Hahishook cart</button>
           <p class="hint">Opens in a new tab.</p>
+          <a id="checkout-recovery" href="https://hahishook.com/cart/" target="_blank" rel="noopener noreferrer" hidden>Check your Hahishook cart</a>
         </div>
       </div>
       <p id="basket-feedback" role="status" class="hint"></p>

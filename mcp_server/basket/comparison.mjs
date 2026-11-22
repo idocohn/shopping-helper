@@ -130,7 +130,17 @@ function productName(text) {
     .replace(/[^a-z0-9א-ת%]+/gu, ' ').trim();
 }
 
-export function candidatesFor(line, products, limit = 6) {
+const substitutionRules = [
+  [/מחית עגבניות/u, /עגבניות מרוסקות/u, 'Crushed tomatoes have a coarser texture than purée.'],
+  [/מיונז אמיתי/u, /מיונז אמיתי/u, 'Both are real mayonnaise. Check the catalog brand.'],
+  [/מרשמלו.*טוויסטר/u, /^מרשמלו(?: אוורירי)?$/u, 'Plain marshmallows instead of the Twister variety.'],
+  [/קרקר דק/u, /קרקר.*דק/u, 'Thin crackers with different seasoning.'],
+  [/דובונים/u, /מקלות תפוח אדמה/u, 'Potato sticks instead of bear-shaped snacks.'],
+  [/במבה/u, /בולי בוטנים/u, 'Peanut puffs from a different brand.'],
+  [/מגבונים.*ללא בישום/u, /מגבונים.*ללא בישום/u, 'Fragrance-free wipes from a different brand.'],
+];
+
+export function candidatesFor(line, products, limit = 6, eligible = () => true) {
   const input = new Set(terms(line.name));
   if (!input.size) return [];
   const expected = pack(line.size);
@@ -139,13 +149,15 @@ export function candidatesFor(line, products, limit = 6) {
     const words = new Set(terms(product.name));
     if (input.has('עגבניות מרוסקות') && !words.has('עגבניות')) return [];
     const common = [...input].filter(word => words.has(word)).length;
-    if (!common) return [];
+    const rule = product.source === 'hahishook' && substitutionRules.find(([order, candidate]) => order.test(line.name) && candidate.test(product.name));
+    if ((!common && !rule) || !eligible(product)) return [];
     const size = productPack(product, expected);
     const compatible = expected && size && expected.dimension === size.dimension;
     const exactSize = compatible && Math.abs(expected.amount - size.amount) < 0.01;
     const score = 2 * common / (input.size + words.size);
     const exactName = productName(line.name) === productName(product.name);
-    return [{product, exactName, exactSize, rank: score + (exactSize ? 0.12 : 0) + (exactName ? 0.2 : 0)}];
+    const localDifference = rule?.[2] || (common >= 2 && score >= 0.72 ? 'Compare the product names for brand or variant differences.' : '');
+    return [{product, exactName, exactSize, localDifference, rank: score + (exactSize ? 0.12 : 0) + (exactName ? 0.2 : 0) + (rule ? 0.15 : 0)}];
   }).sort((a, b) => b.rank - a.rank).slice(0, limit);
 }
 
